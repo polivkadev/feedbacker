@@ -4,6 +4,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { highlightFile } from './highlight.js';
+import './styles.css';
 
 const token = new URLSearchParams(location.search).get('t');
 const storeKey = 'feedbacker:' + token;
@@ -34,16 +35,27 @@ function lineLabel(c) {
   return c.file + ':' + (c.startLine === c.endLine ? c.startLine : c.startLine + '-' + c.endLine);
 }
 
-function branchLabel(repo) {
-  return repo.branch && repo.branch !== 'HEAD' ? ' [' + repo.branch + ']' : '';
+function fileStats(file) {
+  let add = 0, del = 0;
+  for (const r of file.rows) { if (r.t === '+') add++; else if (r.t === '-') del++; }
+  return { add, del };
+}
+
+function Counts({ add, del }) {
+  return (
+    <>
+      {add > 0 && <span className="plus">+{add}</span>}
+      {del > 0 && <span className="minus">−{del}</span>}
+    </>
+  );
 }
 
 function Code({ row, hl }) {
   const h = hl?.get(row);
   return (
     <td className="code">
-      <span className="mark">{row.t === ' ' ? '' : row.t}</span>
-      {h != null ? <span className="hljs" dangerouslySetInnerHTML={{ __html: h }} /> : <span>{row.s}</span>}
+      <span className="sign">{row.t === ' ' ? '' : row.t}</span>
+      {h != null ? <span dangerouslySetInnerHTML={{ __html: h }} /> : <span>{row.s}</span>}
     </td>
   );
 }
@@ -58,11 +70,14 @@ function CommentForm({ label, initial, editing, draftRef, onSave, onCancel }) {
   };
   return (
     <tr className="comment"><td colSpan={3}>
-      <textarea ref={ta} autoFocus defaultValue={initial} placeholder={'Comment on ' + label}
-        onInput={(e) => (draftRef.current = e.target.value)} onKeyDown={keys} />
-      <div className="actions">
-        <button onClick={onCancel}>Cancel</button>
-        <button className="primary" onClick={save}>{editing ? 'Save' : 'Comment'}</button>
+      <div className="form">
+        <textarea ref={ta} autoFocus defaultValue={initial} placeholder={'Comment on ' + label}
+          onInput={(e) => (draftRef.current = e.target.value)} onKeyDown={keys} />
+        <div className="row">
+          <span className="hint">Ctrl+Enter to save, Esc to cancel</span>
+          <button className="btn quiet small" onClick={onCancel}>Cancel</button>
+          <button className="btn primary small" onClick={save}>{editing ? 'Save' : 'Comment'}</button>
+        </div>
       </div>
     </td></tr>
   );
@@ -71,11 +86,15 @@ function CommentForm({ label, initial, editing, draftRef, onSave, onCancel }) {
 function CommentRow({ id, c, onEdit, onDelete }) {
   return (
     <tr className="comment"><td colSpan={3}>
-      <p className="cbody">{c.body}</p>
-      <div className="cmeta">
-        {lineLabel(c)}
-        <button className="link" onClick={() => onEdit(id)}>Edit</button>
-        <button className="link" onClick={() => onDelete(id)}>Delete</button>
+      <div className="note-card">
+        <div className="meta">
+          <span className="where">{lineLabel(c)}</span>
+          <span className="actions">
+            <button className="btn quiet small edit" onClick={() => onEdit(id)}>Edit</button>
+            <button className="btn quiet small" onClick={() => onDelete(id)}>Delete</button>
+          </span>
+        </div>
+        <p className="cbody">{c.body}</p>
       </div>
     </td></tr>
   );
@@ -85,10 +104,12 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
   // Large and minified files start collapsed.
   const minified = useMemo(() => file.rows.some((r) => r.s.length > 1000), [file]);
   const [shown, setShown] = useState(file.rows.length <= 2000 && !minified);
+  const [open, setOpen] = useState(true);
   const hl = useMemo(() => (shown ? highlightFile(file) : null), [file, shown]);
+  const stats = useMemo(() => fileStats(file), [file]);
 
   const rows = [];
-  if (shown) {
+  if (shown && open) {
     file.rows.forEach((row, i) => {
       if (row.t === 'h') {
         rows.push(<tr key={'h' + i} className="hunk"><td className="ln" /><td className="ln" /><td className="code">{row.s}</td></tr>);
@@ -114,58 +135,78 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
   }
 
   return (
-    <div className="file" id={domId}>
-      <div className="head">
+    <div className={'file' + (open ? '' : ' collapsed')} id={domId}>
+      <div className="fhead">
+        <button className="fold" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={(open ? 'Collapse ' : 'Expand ') + file.path}>
+          {open ? '▾' : '▸'}
+        </button>
         <span className={'st ' + file.status}>{STATUS[file.status]}</span>
-        <span>{file.status === 'renamed' ? file.oldPath + ' → ' + file.path : file.path}</span>
+        <span className="name">
+          {file.status === 'renamed' && <span className="old">{file.oldPath} → </span>}
+          {file.path}
+        </span>
+        <Counts {...stats} />
+        {comments.length > 0 && <span className="marks">{comments.length}</span>}
       </div>
-      {file.binary && <div className="note">Binary file</div>}
-      {!file.binary && !file.rows.length && <div className="note">No content changes</div>}
-      {!shown && (
-        <div className="note">
-          <button onClick={() => setShown(true)}>{minified ? 'Show minified file' : `Show large diff (${file.rows.length} lines)`}</button>
+      {open && file.binary && <div className="fnote">Binary file, not shown.</div>}
+      {open && !file.binary && !file.rows.length && <div className="fnote">Only the file mode or name changed.</div>}
+      {open && !shown && (
+        <div className="fnote">
+          {minified ? 'Looks minified, so it starts hidden. ' : `${file.rows.length} lines, so it starts hidden. `}
+          <button className="btn small" onClick={() => setShown(true)}>Show diff</button>
         </div>
       )}
-      <div className="scroll"><table><tbody>{rows}</tbody></table></div>
+      {open && shown && rows.length > 0 && <div className="scroll"><table><tbody>{rows}</tbody></table></div>}
     </div>
   );
 });
 
-function Nav({ review, byFile }) {
+function Tree({ review, byFile }) {
   return (
-    <nav id="nav">
+    <nav className="tree" aria-label="Changed files">
       {review.repos.map((repo, ri) => (
         <div key={ri}>
-          <div className="repo">{repo.label}{branchLabel(repo)}</div>
+          <div className="repo">
+            <span className="label">{repo.label}</span>
+            {hasBranch(repo) && <span className="branch">{repo.branch}</span>}
+          </div>
           {repo.files.map((file, fi) => {
             const n = byFile[ri + ':' + fi]?.length || 0;
             return (
-              <a key={fi} href={'#f' + ri + '-' + fi}>
+              <a key={fi} href={'#f' + ri + '-' + fi} title={file.path}>
                 <span className={'st ' + file.status}>{STATUS[file.status]}</span>
-                <span>{file.path}</span>
-                <span className="count">{n ? '💬' + n : ''}</span>
+                <span className="path"><bdi>{file.path}</bdi></span>
+                <span className="count">{n > 0 && <span className="marks">{n}</span>}</span>
               </a>
             );
           })}
+          {!repo.files.length && <div className="empty-note" style={{ paddingLeft: 6 }}>{repo.error ? 'Could not be read' : 'No changes'}</div>}
         </div>
       ))}
     </nav>
   );
 }
 
+function hasBranch(repo) {
+  return repo.branch && repo.branch !== 'HEAD';
+}
+
 function Questions({ questions, answers, onAnswer }) {
   if (!questions.length) return null;
   return (
-    <section className="questions">
-      <h2>Questions from the agent</h2>
+    <div className="questions">
       {questions.map((q, i) => (
-        <div className="q" key={i}>
+        <div className={'question' + ((answers[i] || '').trim() ? ' answered' : '')} key={i}>
           <p>{q}</p>
           <textarea placeholder="Your answer" defaultValue={answers[i] || ''} onInput={(e) => onAnswer(i, e.target.value)} />
         </div>
       ))}
-    </section>
+    </div>
   );
+}
+
+function plural(n, word) {
+  return n + ' ' + word + (n === 1 ? '' : 's');
 }
 
 function App() {
@@ -250,36 +291,56 @@ function App() {
     setDone({ verdict, n: body.comments.length });
   }
 
+  const totals = useMemo(() => {
+    if (!review) return null;
+    let files = 0, add = 0, del = 0;
+    for (const repo of review.repos) for (const f of repo.files) { files++; const st = fileStats(f); add += st.add; del += st.del; }
+    return { files, add, del };
+  }, [review]);
+  const nComments = Object.keys(state.comments).length;
+
   if (done) {
     return (
-      <div className="done">
-        <h1>{done.verdict === 'approve' ? 'Approved' : 'Changes requested'}</h1>
-        <p>Sent to the agent with {done.n} comment{done.n === 1 ? '' : 's'}. You can close this tab.</p>
+      <div className="status done">
+        <span className={'stamp ' + done.verdict}>{done.verdict === 'approve' ? 'Approved' : 'Changes requested'}</span>
+        <h1>Sent to the agent</h1>
+        <p>{plural(done.n, 'comment')} went back with your verdict. You can close this tab.</p>
       </div>
     );
   }
-  if (error) return <div className="done"><h1>Review unavailable</h1><p>{error}</p></div>;
-  if (!review) return <div className="done"><p className="hint">Loading…</p></div>;
+  if (error) return <div className="status"><h1>This review isn't available</h1><p>{error}</p></div>;
+  if (!review) return <div className="status"><p>Loading the changes…</p></div>;
 
   return (
     <>
-      <header>
-        <h1>Review</h1>
-        <p id="summary">{review.summary}</p>
-        <p className="hint">Click a line number to comment on it; shift-click another to comment on a range.</p>
+      <header className="bar">
+        <span className="title">Review</span>
+        <span className="stats">
+          <span>{plural(totals.files, 'file')} in {plural(review.repos.length, 'repo')}</span>
+          <Counts add={totals.add} del={totals.del} />
+        </span>
+        {nComments > 0 && <span className="marks">{plural(nComments, 'comment')}</span>}
+        <span className="spacer" />
+        <button id="changes" className="btn reject" onClick={() => submit('request_changes')}>Request changes</button>
+        <button id="approve" className="btn approve" onClick={() => submit('approve')}>Approve</button>
       </header>
-      <div id="layout">
-        <Nav review={review} byFile={byFile} />
-        <main id="main">
-          <Questions questions={review.questions} answers={state.answers} onAnswer={onAnswer} />
+      <div className="layout">
+        <Tree review={review} byFile={byFile} />
+        <main className="review">
+          <section className="handoff">
+            <p id="summary" className={'summary' + (review.summary ? '' : ' empty')}>{review.summary || 'The agent didn’t describe the change.'}</p>
+            <Questions questions={review.questions} answers={state.answers} onAnswer={onAnswer} />
+          </section>
+          <p className="empty-note">Click a line number to comment on it. Shift-click a second one to cover a range.</p>
           {review.repos.map((repo, ri) => (
-            <div key={ri}>
-              <h2 className="repo">
-                {repo.label}{branchLabel(repo)}{' '}
-                <small>{repo.path}{repo.base !== 'HEAD' ? ' vs ' + repo.base : ''}</small>
-              </h2>
+            <section key={ri}>
+              <div className="repo-head">
+                <h2>{repo.label}</h2>
+                {hasBranch(repo) && <span className="branch">{repo.branch}</span>}
+                <span className="where">{repo.path}{repo.base !== 'HEAD' ? ' compared with ' + repo.base : ''}</span>
+              </div>
               {repo.error && <p className="error">{repo.error}</p>}
-              {!repo.error && !repo.files.length && <p className="hint">No changes.</p>}
+              {!repo.error && !repo.files.length && <p className="empty-note">No changes in this repo.</p>}
               {repo.files.map((file, fi) => {
                 const fk = ri + ':' + fi;
                 const fileSel = sel?.fk === fk ? sel : null;
@@ -290,18 +351,20 @@ function App() {
                     onSelect={onSelect} onSave={onSave} onCancel={onCancel} onEdit={onEdit} onDelete={onDelete} />
                 );
               })}
-            </div>
+            </section>
           ))}
+          <section className="finish">
+            <h2>Your review</h2>
+            <p>Anything for the agent that isn’t about a specific line.</p>
+            <textarea id="general" placeholder="General comment (optional)" defaultValue={state.general}
+              onInput={(e) => { const v = e.target.value; update((st) => ({ ...st, general: v })); }} />
+            <div className="row">
+              <button className="btn approve" onClick={() => submit('approve')}>Approve</button>
+              <button className="btn reject" onClick={() => submit('request_changes')}>Request changes</button>
+            </div>
+          </section>
         </main>
       </div>
-      <footer>
-        <textarea id="general" placeholder="General comment (optional)" defaultValue={state.general}
-          onInput={(e) => { const v = e.target.value; update((st) => ({ ...st, general: v })); }} />
-        <div className="buttons">
-          <button id="changes" className="danger" onClick={() => submit('request_changes')}>Request changes</button>
-          <button id="approve" className="primary" onClick={() => submit('approve')}>Approve</button>
-        </div>
-      </footer>
     </>
   );
 }

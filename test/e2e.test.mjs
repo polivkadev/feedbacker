@@ -91,8 +91,9 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
 
     // Highlighted, both repos, questions and summary shown.
     assert.equal(await page.evaluate(`document.getElementById('summary').textContent`), 'Added a comment');
-    assert.ok(await page.evaluate(`!!document.querySelector('.file .hljs span')`), 'syntax highlighting applied');
-    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('nav .repo')].map(e => e.textContent)`), ['web [main]', 'lib [main]']);
+    assert.ok(await page.evaluate(`!!document.querySelector('.file td.code [class^=hljs-]')`), 'syntax highlighting applied');
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.tree .repo')].map(e => e.querySelector('.label').textContent + ' ' + e.querySelector('.branch').textContent)`), ['web main', 'lib main']);
+    assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('td.code')).fontFamily.includes('JetBrains Mono')`), true, 'bundled code font');
 
     // Comment on line 2 of app.js (the added line) via the new-side gutter.
     await page.evaluate(`(() => {
@@ -115,14 +116,14 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     await page.type('#f1-0 tr.comment textarea', 'Whole file is odd');
     await page.evaluate(`document.querySelector('#f1-0 tr.comment button.primary').click()`);
     await page.waitFor(`document.querySelectorAll('tr.comment .cbody').length === 2`);
-    assert.equal(await page.evaluate(`document.querySelectorAll('nav .count')[0].textContent`), '💬1');
+    assert.equal(await page.evaluate(`document.querySelectorAll('.tree .count')[0].textContent`), '1');
 
     // Comments survive a reload.
     await page.send('Page.reload');
     await page.waitFor(`document.querySelectorAll('tr.comment .cbody').length === 2`);
 
     // Edit the first comment (replace its text) and save.
-    await page.evaluate(`document.querySelector('#f0-0 tr.comment button.link').click()`);
+    await page.evaluate(`document.querySelector('#f0-0 tr.comment button.edit').click()`);
     await page.waitFor(`document.querySelector('#f0-0 tr.comment textarea')?.value === 'Drop this comment'`);
     await page.evaluate(`document.querySelector('#f0-0 tr.comment textarea').select()`);
     await page.send('Input.insertText', { text: 'Drop this comment, please' });
@@ -134,7 +135,7 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     await page.type('.questions textarea', 'No');
     await page.type('#general', 'Almost there');
     await page.evaluate(`document.getElementById('changes').click()`);
-    await page.waitFor(`document.querySelector('.done h1')?.textContent === 'Changes requested'`);
+    await page.waitFor(`document.querySelector('.done .stamp')?.textContent === 'Changes requested'`);
   } finally {
     page.close();
   }

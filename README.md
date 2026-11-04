@@ -65,7 +65,8 @@ feedbacker ~/Projects/api ~/Projects/web@main \
 
 In the browser:
 
-- Click a line number to comment on that line; shift-click a second one to comment on a range. Ctrl+Enter saves, Esc cancels.
+- Click a line number to comment on that line (a highlighter "+" shows where); shift-click a second one to comment on a range. Ctrl+Enter saves, Esc cancels.
+- The top bar shows the size of the change and keeps **Approve** and **Request changes** in reach; files can be collapsed, and the file tree shows where your comments are.
 - Comments, answers and the general comment are kept in the browser's local storage until you submit, so a refresh loses nothing.
 - **Approve** or **Request changes** sends everything to the agent and closes the server.
 
@@ -123,8 +124,8 @@ feedbacker ──markdown (tool result / stdout)──▶ agent
 |---|---|
 | `src/core.mjs` | Reads diffs (`git diff <base>` plus untracked files), parses them, serves the page, formats feedback. |
 | `src/page.html` | Page shell: styles, and the bundle from `src/dist/`. |
-| `src/ui/` | The review page in React 19 (JSX): diff table, inline comments, questions, submit; syntax highlighting with highlight.js. |
-| `src/dist/` | The committed bundle, built from `src/ui/` by `build.mjs` (esbuild). |
+| `src/ui/` | The review page in React 19 (JSX): diff table, inline comments, questions, submit; highlight.js for syntax, `styles.css` for the look (light and dark, colour tokens at the top). |
+| `src/dist/` | The committed bundle (JS, CSS and fonts), built from `src/ui/` by `build.mjs` (esbuild). |
 | `src/mcp.mjs` | Minimal MCP server over stdio (JSON-RPC), one tool. |
 | `bin/feedbacker.mjs` | CLI: review, `list`, `mcp`. |
 | `skills/review/SKILL.md`, `.mcp.json`, `.claude-plugin/` | The Claude Code plugin and its marketplace entry. |
@@ -134,7 +135,7 @@ Open reviews write a small file (URL, repos, pid) to `$XDG_STATE_HOME/feedbacker
 ## Development
 
 ```bash
-pnpm install     # dev dependencies only: React, highlight.js, esbuild
+pnpm install     # dev dependencies only: React, highlight.js, fonts, esbuild
 pnpm build       # after changing src/ui: rebuilds src/dist (commit it)
 pnpm test
 ```
@@ -147,4 +148,4 @@ Plans: [ROADMAP.md](ROADMAP.md).
 
 ## Licence
 
-MIT. The bundle in `src/dist/` includes React, ReactDOM and scheduler (MIT) and highlight.js (BSD-3-Clause); their licences are in `src/dist/THIRD_PARTY_LICENSES.txt`.
+MIT. The bundle in `src/dist/` includes React, ReactDOM and scheduler (MIT), highlight.js (BSD-3-Clause), and the Atkinson Hyperlegible Next and JetBrains Mono fonts (OFL-1.1); their licences are in `src/dist/THIRD_PARTY_LICENSES.txt`. The fonts are served locally, so the page never loads anything from the internet.

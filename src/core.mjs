@@ -11,12 +11,15 @@ import { fileURLToPath } from 'node:url';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PAGE = path.join(DIR, 'page.html');
-// Static files anyone may fetch (no secrets): URL path -> [file, content type].
-const ASSETS = {
-  '/dist/app.js': ['dist/app.js', 'text/javascript'],
-  '/dist/github.min.css': ['dist/github.min.css', 'text/css'],
-  '/dist/github-dark.min.css': ['dist/github-dark.min.css', 'text/css'],
-};
+// The page's bundle (src/dist, built by build.mjs). These files hold no
+// secrets, so they are served without the token. URL path -> file.
+const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.txt': 'text/plain' };
+const ASSETS = Object.fromEntries(
+  fs.readdirSync(path.join(DIR, 'dist'), { recursive: true })
+    .map((f) => f.split(path.sep).join('/'))
+    .filter((f) => TYPES[path.extname(f)])
+    .map((f) => ['/dist/' + f, path.join(DIR, 'dist', f)]),
+);
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '-M', '--src-prefix=a/', '--dst-prefix=b/'];
 
 function git(cwd, args, okCodes = [0]) {
@@ -221,9 +224,9 @@ export function startReview(review, { port = 0, open = true } = {}) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     // Static assets are public; everything else needs the token.
-    const asset = req.method === 'GET' && ASSETS[url.pathname];
+    const asset = req.method === 'GET' && Object.hasOwn(ASSETS, url.pathname) && ASSETS[url.pathname];
     if (asset) {
-      res.writeHead(200, { 'content-type': asset[1], 'cache-control': 'no-cache' }).end(fs.readFileSync(path.join(DIR, asset[0])));
+      res.writeHead(200, { 'content-type': TYPES[path.extname(asset)], 'cache-control': 'no-cache' }).end(fs.readFileSync(asset));
       return;
     }
     if (url.searchParams.get('t') !== token) {
