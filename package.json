@@ -1,6 +1,6 @@
 {
   "name": "agent-feedbacker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A local merge-request-style review page that coding agents open to collect your line comments and answers, across several git repos.",
   "type": "module",
   "bin": {
