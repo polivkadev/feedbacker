@@ -75,9 +75,11 @@ export function parseDiff(text) {
   return files;
 }
 
-// "repo", "repo@base" or { path, base, worktrees }.
+// "repo", "repo@base" or { path, base, worktrees, exact }. `exact` diffs
+// against base itself instead of the fork point (session baselines, which can
+// be snapshot commits that HEAD never contains).
 export function parseSpec(spec) {
-  if (typeof spec !== 'string') return { path: spec.path, base: spec.base || 'HEAD', worktrees: !!spec.worktrees };
+  if (typeof spec !== 'string') return { path: spec.path, base: spec.base || 'HEAD', worktrees: !!spec.worktrees, exact: !!spec.exact, session: !!spec.session };
   const at = spec.lastIndexOf('@');
   if (at > 0 && !fs.existsSync(spec)) return { path: spec.slice(0, at), base: spec.slice(at + 1) || 'HEAD', worktrees: false };
   return { path: spec, base: 'HEAD', worktrees: false };
@@ -99,13 +101,13 @@ export function listWorktrees(dir) {
 // point where HEAD forked from base (like a merge request), or base itself
 // when they share no history.
 export function loadRepo(spec) {
-  const { path: p, base } = parseSpec(spec);
-  const repo = { path: path.resolve(p), base, branch: '', files: [], error: null };
+  const { path: p, base, exact, session } = parseSpec(spec);
+  const repo = { path: path.resolve(p), base, session, branch: '', files: [], error: null };
   try {
     repo.path = git(repo.path, ['rev-parse', '--show-toplevel']).trim();
     repo.branch = git(repo.path, ['rev-parse', '--abbrev-ref', 'HEAD']).trim();
     let from = git(repo.path, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`]).trim();
-    try { from = git(repo.path, ['merge-base', from, 'HEAD']).trim(); } catch {}
+    if (!exact) try { from = git(repo.path, ['merge-base', from, 'HEAD']).trim(); } catch {}
     let text = git(repo.path, ['diff', ...DIFF_FLAGS, from, '--']);
     const untracked = git(repo.path, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
     for (const f of untracked) {
@@ -128,7 +130,7 @@ export function buildReview({ repos = ['.'], summary = '', questions = [], workt
     if (spec.worktrees || worktrees) {
       try { paths = listWorktrees(spec.path); } catch {} // not a repo: loadRepo reports it
     }
-    for (const p of paths) specs.push({ path: p, base: spec.base });
+    for (const p of paths) specs.push({ path: p, base: spec.base, exact: spec.exact, session: spec.session });
   }
   const seen = new Set();
   const loaded = specs.map(loadRepo).filter((r) => !seen.has(r.path) && seen.add(r.path));
@@ -148,6 +150,16 @@ export function hasChanges(review) {
 
 export function toMarkdown(review, fb) {
   const out = ['# Review feedback', '', `Verdict: **${fb.verdict === 'approve' ? 'approved' : 'changes requested'}**`, ''];
+  // What the user actually saw, so the agent knows what the verdict covers
+  // (a hook may have filled in bases or added repos).
+  out.push('Reviewed:', '');
+  for (const r of review.repos) {
+    const names = r.files.slice(0, 10).map((f) => f.path).filter(Boolean).join(', ') + (r.files.length > 10 ? ', …' : '');
+    const what = r.error ? `could not be read (${r.error})`
+      : `${r.files.length} file${r.files.length === 1 ? '' : 's'} changed${names ? ` (${names})` : ''}`;
+    out.push(`- ${r.path}${r.branch && r.branch !== 'HEAD' ? ` (${r.branch})` : ''}: ${what}, ${describeBase(r)}`);
+  }
+  out.push('');
   if (fb.general.trim()) out.push('## General', '', fb.general.trim(), '');
   if (fb.answers.length) {
     out.push('## Answers', '');
@@ -169,6 +181,12 @@ export function toMarkdown(review, fb) {
     out.push('_No comments._', '');
   }
   return out.join('\n');
+}
+
+export function describeBase(r) {
+  if (r.session) return 'changes since the session started';
+  if (r.base === 'HEAD') return 'uncommitted changes';
+  return `compared with ${/^[0-9a-f]{40}$/.test(r.base) ? r.base.slice(0, 10) : r.base}`;
 }
 
 // Keep only the fields we expect from the browser, with safe defaults.

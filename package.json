@@ -11,6 +11,7 @@
     "src/*.mjs",
     "src/page.html",
     "src/dist",
+    "hooks",
     "skills",
     ".claude-plugin",
     ".mcp.json"

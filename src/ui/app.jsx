@@ -387,7 +387,7 @@ function App() {
               <div className="repo-head">
                 <h2>{repo.label}</h2>
                 {hasBranch(repo) && <span className="branch">{repo.branch}</span>}
-                <span className="where">{repo.path}{repo.base !== 'HEAD' ? ' compared with ' + repo.base : ''}</span>
+                <span className="where">{repo.path}, {repo.session ? 'changes since the session started' : repo.base === 'HEAD' ? 'uncommitted changes' : 'compared with ' + (/^[0-9a-f]{40}$/.test(repo.base) ? repo.base.slice(0, 10) : repo.base)}</span>
               </div>
               {repo.error && <p className="error">{repo.error}</p>}
               {!repo.error && !repo.files.length && <p className="empty-note">No changes in this repo.</p>}

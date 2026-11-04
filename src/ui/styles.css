@@ -235,7 +235,8 @@ td.code .sign { display: inline-block; width: 1.4em; color: var(--faint); user-s
 tr.add td { background: var(--add); } tr.add td.ln { background: var(--add-gutter); } tr.add .sign { color: var(--add-ink); }
 tr.del td { background: var(--del); } tr.del td.ln { background: var(--del-gutter); } tr.del .sign { color: var(--del-ink); }
 /* Changed words inside a changed line. */
-mark.wd { color: inherit; border-radius: 3px; padding: 1px 0; }
+/* No padding or rounding: a mark split by syntax colours must read as one band. */
+mark.wd { color: inherit; padding: 0; border-radius: 0; }
 tr.add mark.wd { background: var(--add-word); }
 tr.del mark.wd { background: var(--del-word); }
 tr.sel mark.wd { background: var(--marker); color: var(--on-marker, #3d2f00); }

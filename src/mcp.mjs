@@ -28,6 +28,8 @@ const TOOL = {
           properties: {
             path: { type: 'string', description: 'Absolute path to the repo (or any folder inside it).' },
             base: { type: 'string', description: 'Commit, branch or tag to diff against. Default HEAD (uncommitted changes only). With a branch, the diff starts where HEAD forked from it, like a merge request.' },
+            exact: { type: 'boolean', description: 'Diff against base itself, not the point where HEAD forked from it. Set by the session-baseline hook; rarely needed by hand.' },
+            session: { type: 'boolean', description: 'Set by the session-baseline hook: base is where the repo stood when this session started.' },
             worktrees: { type: 'boolean', description: 'Also review every other git worktree of this repo (e.g. parallel agents\' work), each against the same base.' },
           },
           required: ['path'],
@@ -59,7 +61,7 @@ async function callTool(id, params) {
     return toolError('`repos` must be a non-empty array of { path, base? }.');
   }
   const review = buildReview({
-    repos: args.repos.map((r) => (typeof r === 'string' ? r : { path: r.path, base: r.base, worktrees: r.worktrees })),
+    repos: args.repos.map((r) => (typeof r === 'string' ? r : { path: r.path, base: r.base, worktrees: r.worktrees, exact: r.exact, session: r.session })),
     summary: args.summary || '',
     questions: Array.isArray(args.questions) ? args.questions.map(String) : [],
   });

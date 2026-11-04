@@ -22,6 +22,7 @@ This gives Claude:
 
 - the MCP tool `request_review` (it shows up as `mcp__plugin_feedbacker_feedbacker__request_review`)
 - the skill `/feedbacker:review`, which tells Claude when and how to ask for a review
+- hooks for the **session baseline**: each repo's state is recorded when the session first touches it (at session start for the current repo, and before the first edit in any other repo). When Claude asks for a review without a base, the review shows exactly what changed in this session, even if Claude committed along the way, and repos Claude changed but forgot to pass are added. Uncommitted work from before the session is left out, because the baseline is a snapshot of it (`git stash create`, which changes neither your working tree nor your stash list). New untracked files from before the session still show up.
 
 Then just say "let me review it" or run `/feedbacker:review`. To try it from a checkout without installing: `claude --plugin-dir /path/to/feedbacker`.
 
@@ -64,6 +65,8 @@ feedbacker ~/Projects/api ~/Projects/web@main \
 
 In the browser:
 
+- In changed lines, the changed words are marked.
+- Tick **Viewed** on a file when you're done with it: it collapses, dims in the file tree, and the top bar counts how many you've viewed.
 - Click a line number to comment on that line (a highlighter "+" shows where); shift-click a second one to comment on a range. Ctrl+Enter saves, Esc cancels.
 - With several repos, the picker in the top bar switches between all of them and a single one (the summary, questions and your comments in other repos stay). The top bar also shows the size of the change and keeps **Approve** and **Request changes** in reach; files can be collapsed, and the file tree shows where your comments are.
 - Comments, answers and the general comment are kept in the browser's local storage until you submit, so a refresh loses nothing.
@@ -75,7 +78,7 @@ In the browser:
 
 | Argument | Type | |
 |---|---|---|
-| `repos` | `[{ path, base?, worktrees? }]` | Required. Absolute paths; `base` defaults to `HEAD`; `worktrees: true` adds all worktrees of that repo. |
+| `repos` | `[{ path, base?, worktrees? }]` | Required. Absolute paths; `base` defaults to `HEAD` (or, with the plugin's hooks, where the repo stood when the session started); `worktrees: true` adds all worktrees of that repo. (`exact` and `session` are set by the hook.) |
 | `summary` | string | Shown at the top of the page. |
 | `questions` | string[] | Shown with an answer box each. |
 
@@ -85,6 +88,10 @@ It blocks until the user submits (Claude Code keeps long MCP calls open; it send
 # Review feedback
 
 Verdict: **changes requested**
+
+Reviewed:
+
+- /home/me/Projects/api (feature/config): 2 files changed (src/server.ts, src/config.ts), changes since the session started
 
 ## General
 
@@ -109,7 +116,7 @@ No, env is enough.
 Make the host configurable too.
 ````
 
-Each comment carries the code it refers to, so line numbers drifting doesn't lose the context. Cancelling the tool call closes the review page.
+The result starts with what was reviewed (each repo, its files and base), so the agent knows what the verdict covers. Each comment carries the code it refers to, so line numbers drifting doesn't lose the context. Cancelling the tool call closes the review page.
 
 ## How it works
 
@@ -126,7 +133,8 @@ feedbacker ──markdown (tool result / stdout)──▶ agent
 | `src/ui/` | The review page in React 19 (JSX): diff table, inline comments, questions, submit; highlight.js for syntax, `styles.css` for the look (light and dark, colour tokens at the top). |
 | `src/dist/` | The committed bundle (JS, CSS and fonts), built from `src/ui/` by `build.mjs` (esbuild). |
 | `src/mcp.mjs` | Minimal MCP server over stdio (JSON-RPC), one tool. |
-| `bin/feedbacker.mjs` | CLI: review, `list`, `mcp`. |
+| `src/baseline.mjs`, `hooks/hooks.json` | Session baseline: `feedbacker hook` records repos (SessionStart, PreToolUse on edits) and fills in bases for `request_review` (PreToolUse, via `updatedInput`). Stored in `$XDG_STATE_HOME/feedbacker/sessions/`, forgotten after 30 days. |
+| `bin/feedbacker.mjs` | CLI: review, `list`, `mcp`, `hook`. |
 | `skills/review/SKILL.md`, `.mcp.json`, `.claude-plugin/` | The Claude Code plugin and its marketplace entry. |
 
 Open reviews write a small file (URL, repos, pid) to `$XDG_STATE_HOME/feedbacker/` (default `~/.local/state/feedbacker/`, mode 0600) and remove it when they finish; `list` reads them.

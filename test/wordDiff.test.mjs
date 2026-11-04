@@ -37,6 +37,17 @@ test('wordMarks: pairs runs of deleted and added lines in order', () => {
   assert.equal(m.has(rows[0]), false);
 });
 
+test('wordMarks: pairs each deleted line with its most similar added line', () => {
+  const rows = [
+    { t: '-', s: '// TODO: bind host' }, { t: '-', s: 'server.listen(port);' },
+    { t: '+', s: 'server.listen(config.port, config.host);' }, { t: '+', s: 'console.log(`listening on ${config.port}`);' },
+  ];
+  const m = wordMarks(rows);
+  assert.equal(m.has(rows[0]), false, 'the TODO has no similar line');
+  assert.deepEqual(cut(rows[2].s, m.get(rows[2])), ['config.', ', config.host']);
+  assert.equal(m.has(rows[3]), false, 'not paired with server.listen');
+});
+
 test('markRanges: works inside highlighted HTML and with entities', () => {
   const html = '<span class="hljs-keyword">const</span> a = <span class="hljs-string">&quot;x&lt;y&quot;</span>;';
   // Text is: const a = "x<y";  mark "a" (6-7) and the string (10-15)

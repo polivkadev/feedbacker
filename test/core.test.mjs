@@ -94,7 +94,13 @@ test('buildReview: several repos, labels disambiguated', () => {
 });
 
 test('toMarkdown: verdict, general, answers, comments grouped by repo', () => {
-  const review = { questions: ['Configurable?'], repos: [{ path: '/r/one' }, { path: '/r/two' }] };
+  const review = {
+    questions: ['Configurable?'],
+    repos: [
+      { path: '/r/one', branch: 'main', base: 'HEAD', files: [{ path: 'a.ts' }] },
+      { path: '/r/two', branch: 'feat', base: 'a'.repeat(40), session: true, files: [{ path: 'b.ts' }, { path: 'c.ts' }] },
+    ],
+  };
   const fb = normalizeFeedback(review, {
     verdict: 'request_changes',
     general: 'Nice overall.',
@@ -106,6 +112,8 @@ test('toMarkdown: verdict, general, answers, comments grouped by repo', () => {
   });
   const md = toMarkdown(review, fb);
   assert.match(md, /Verdict: \*\*changes requested\*\*/);
+  assert.match(md, /- \/r\/one \(main\): 1 file changed \(a\.ts\), uncommitted changes/);
+  assert.match(md, /- \/r\/two \(feat\): 2 files changed \(b\.ts, c\.ts\), changes since the session started/);
   assert.match(md, /## General\n\nNice overall\./);
   assert.match(md, /\*\*Q: Configurable\?\*\*\n\nYes, via env\./);
   assert.ok(md.indexOf('### /r/one') < md.indexOf('### /r/two'));

@@ -4,10 +4,12 @@
 
 import { buildReview, hasChanges, listReviews, startReview, toMarkdown } from '../src/core.mjs';
 import { runMcp } from '../src/mcp.mjs';
+import { runHook } from '../src/baseline.mjs';
 
 const USAGE = `Usage: feedbacker [options] [repo[@base] ...]
        feedbacker list
        feedbacker mcp
+       feedbacker hook
 
 Opens a review page for the changes in each repo (default: current directory)
 and prints the feedback to stdout when the user submits.
@@ -24,7 +26,10 @@ and prints the feedback to stdout when the user submits.
   -h, --help         Show this help.
 
   list               Show the URLs of reviews that are waiting for you.
-  mcp                Run as an MCP server on stdio (tool: request_review).`;
+  mcp                Run as an MCP server on stdio (tool: request_review).
+  hook               Claude Code hook (reads the event on stdin): records each
+                     repo's state when a session first touches it, and fills
+                     that in as the base of request_review.`;
 
 function fail(msg) {
   console.error(`feedbacker: ${msg}`);
@@ -59,6 +64,8 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process
 const argv = process.argv.slice(2);
 if (argv[0] === 'mcp') {
   runMcp();
+} else if (argv[0] === 'hook') {
+  await runHook();
 } else if (argv[0] === 'list') {
   const reviews = listReviews();
   if (!reviews.length) console.log('No reviews waiting.');

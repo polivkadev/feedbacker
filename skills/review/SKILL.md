@@ -10,9 +10,7 @@ Feedbacker opens a review page in the user's browser with the diffs of the repos
 ## How
 
 1. List **every git repo and worktree you changed in this session**, as absolute paths. Include repos outside the current directory. If the work is spread over several worktrees of one repo (e.g. parallel agents), pass one of them with `"worktrees": true` instead of listing each.
-2. Pick a base per repo:
-   - Uncommitted changes only: leave `base` out (it defaults to `HEAD`).
-   - You committed during the session: use the commit the session started from (`git log` to find it) or the branch you forked from, e.g. `main`.
+2. Pick a base per repo, usually by leaving it out: the plugin's hooks recorded where each repo stood when this session first touched it, and fill that in, so the review shows exactly what you changed in this session, commits included. Only pass `base` for something else, e.g. a whole branch against `main`. The result starts with a "Reviewed" list showing what the user saw.
 3. Call the `request_review` tool of the `feedbacker` MCP server with:
    - `repos`: `[{ "path": "/abs/path", "base": "main", "worktrees": false }, ...]`
    - `summary`: two to five sentences on what you changed and why.
