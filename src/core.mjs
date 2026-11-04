@@ -13,13 +13,9 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PAGE = path.join(DIR, 'page.html');
 // Static files anyone may fetch (no secrets): URL path -> [file, content type].
 const ASSETS = {
-  '/app.js': ['app.js', 'text/javascript'],
-  '/vendor/highlight.min.js': ['vendor/highlight.min.js', 'text/javascript'],
-  '/vendor/react.production.min.js': ['vendor/react.production.min.js', 'text/javascript'],
-  '/vendor/react-dom.production.min.js': ['vendor/react-dom.production.min.js', 'text/javascript'],
-  '/vendor/htm.umd.js': ['vendor/htm.umd.js', 'text/javascript'],
-  '/vendor/github.min.css': ['vendor/github.min.css', 'text/css'],
-  '/vendor/github-dark.min.css': ['vendor/github-dark.min.css', 'text/css'],
+  '/dist/app.js': ['dist/app.js', 'text/javascript'],
+  '/dist/github.min.css': ['dist/github.min.css', 'text/css'],
+  '/dist/github-dark.min.css': ['dist/github-dark.min.css', 'text/css'],
 };
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '-M', '--src-prefix=a/', '--dst-prefix=b/'];
 

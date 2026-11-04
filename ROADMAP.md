@@ -1,10 +1,10 @@
 # Roadmap
 
-Feedbacker should stay small: one process, no build step, nothing to install. If the page outgrows htm templates, the next step is a small esbuild step that writes a committed bundle, so users still need no build. Each step below is meant to be useful on its own.
+Feedbacker should stay small: one process, nothing to install or build to use it. Only the page has a build step (esbuild), and its output is committed. Each step below is meant to be useful on its own.
 
 ## Done: MVP (0.1)
 
-- Review page as a React app (React 18 UMD + htm, vendored, still no build step).
+- Review page in React 19 + JSX, bundled by esbuild into a committed `src/dist/` (a test checks it's current).
 - Multi-repo review page: diffs of working tree vs a base per repo, untracked files included, syntax highlighting, light and dark themes.
 - Line and range comments, answers to agent questions, general comment, Approve / Request changes. State survives a refresh.
 - CLI (`feedbacker`, `feedbacker list`), MCP server (`request_review`), Claude Code plugin (MCP + skill), marketplace entry.
