@@ -1,6 +1,6 @@
 {
   "name": "feedbacker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Review an agent's changes across several git repos in a local MR-style page and send line comments back to it.",
   "author": { "name": "Pavel Polivka" },
   "repository": "https://github.com/PavlikPolivka/feedbacker",

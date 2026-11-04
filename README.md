@@ -157,7 +157,7 @@ CI runs the tests on Node 22 and 24 for every push and pull request (`.github/wo
 
 Publishing to npm is done by GitHub Actions (`.github/workflows/publish.yml`) with npm trusted publishing, so no npm token is stored anywhere and each version gets a provenance statement.
 
-1. Bump `version` in `package.json` (and `.claude-plugin/plugin.json`), commit, push.
+1. Bump `version` in `package.json` and `.claude-plugin/plugin.json` (the MCP server reads it from `package.json`), commit, push.
 2. Create a GitHub release with the tag `vX.Y.Z` matching that version: `gh release create v0.2.0 --generate-notes`.
 3. The workflow checks the tag, runs the tests and publishes.
 

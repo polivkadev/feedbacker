@@ -1,10 +1,11 @@
 // Minimal MCP server over stdio (newline-delimited JSON-RPC 2.0) with one tool,
 // request_review, which blocks until the user submits the review page.
 
+import fs from 'node:fs';
 import readline from 'node:readline';
 import { buildReview, hasChanges, startReview, toMarkdown } from './core.mjs';
 
-const VERSION = '0.1.0';
+const { version: VERSION } = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const PROTOCOL = '2025-06-18';
 
 const TOOL = {
