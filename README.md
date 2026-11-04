@@ -66,7 +66,7 @@ feedbacker ~/Projects/api ~/Projects/web@main \
 In the browser:
 
 - Click a line number to comment on that line (a highlighter "+" shows where); shift-click a second one to comment on a range. Ctrl+Enter saves, Esc cancels.
-- The top bar shows the size of the change and keeps **Approve** and **Request changes** in reach; files can be collapsed, and the file tree shows where your comments are.
+- With several repos, the picker in the top bar switches between all of them and a single one (the summary, questions and your comments in other repos stay). The top bar also shows the size of the change and keeps **Approve** and **Request changes** in reach; files can be collapsed, and the file tree shows where your comments are.
 - Comments, answers and the general comment are kept in the browser's local storage until you submit, so a refresh loses nothing.
 - **Approve** or **Request changes** sends everything to the agent and closes the server.
 

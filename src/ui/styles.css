@@ -118,6 +118,20 @@ button, textarea { font: inherit; color: inherit; }
 .btn.quiet { border-color: transparent; background: transparent; color: var(--muted); }
 .btn.quiet:hover { color: var(--ink); background: var(--sunk); }
 
+/* Repo picker: a native select, styled to sit in the bar. */
+.picker { position: relative; display: inline-flex; min-width: 0; }
+.picker select {
+  appearance: none; min-width: 0; max-width: 320px; text-overflow: ellipsis;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 5px 30px 5px 12px; cursor: pointer;
+}
+.picker select:hover { background: var(--sunk); }
+.picker::after {
+  content: '▾'; position: absolute; right: 11px; top: 50%; transform: translateY(-52%);
+  pointer-events: none; color: var(--muted); font-size: 12px;
+}
+
 /* Page: file tree on the left, the review on the right. */
 .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); }
 .tree {
@@ -186,7 +200,8 @@ textarea:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3p
 .fnote { padding: 12px 16px; color: var(--muted); font-size: 14px; }
 .scroll { overflow-x: auto; border-radius: 0 0 10px 10px; }
 
-table { border-collapse: collapse; width: 100%; font: 12.5px/21px var(--mono); }
+/* No ligatures: a review shows the exact characters (=> not ⇒). */
+table { border-collapse: collapse; width: 100%; font: 12.5px/21px var(--mono); font-variant-ligatures: none; }
 td.ln {
   width: 1%; min-width: 48px; padding: 0 10px; text-align: right;
   color: var(--faint); user-select: none; cursor: pointer; vertical-align: top; position: relative;
@@ -254,6 +269,7 @@ tr.comment > td { padding: 8px 14px 10px 62px; background: var(--panel); font: 1
   .review { padding: 20px 16px 100px; }
   .bar { padding: 0 16px; gap: 10px; }
   .bar .stats, .bar .marks { display: none; }
+  .picker select { max-width: 34vw; }
   .bar .btn { padding: 6px 10px; }
   .summary { font-size: 18px; }
   tr.comment > td { padding-left: 14px; }

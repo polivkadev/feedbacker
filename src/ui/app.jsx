@@ -13,7 +13,7 @@ const EMPTY = [];
 
 // Saved so a refresh doesn't lose work. comments: id -> comment.
 function loadState() {
-  const empty = { comments: {}, answers: {}, general: '', nextId: 1 };
+  const empty = { comments: {}, answers: {}, general: '', nextId: 1, view: 'all' };
   try { return { ...empty, ...JSON.parse(localStorage.getItem(storeKey)) }; } catch { return empty; }
 }
 
@@ -161,10 +161,10 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
   );
 });
 
-function Tree({ review, byFile }) {
+function Tree({ review, visible, byFile }) {
   return (
     <nav className="tree" aria-label="Changed files">
-      {review.repos.map((repo, ri) => (
+      {review.repos.map((repo, ri) => visible(ri) && (
         <div key={ri}>
           <div className="repo">
             <span className="label">{repo.label}</span>
@@ -184,6 +184,27 @@ function Tree({ review, byFile }) {
         </div>
       ))}
     </nav>
+  );
+}
+
+// "All repos" or a single one. Only shown when there is more than one repo.
+function RepoPicker({ review, view, byFile, onChange }) {
+  if (review.repos.length < 2) return null;
+  const comments = (ri) => review.repos[ri].files.reduce((n, _, fi) => n + (byFile[ri + ':' + fi]?.length || 0), 0);
+  return (
+    <span className="picker">
+      <select aria-label="Show repos" value={view} onChange={(e) => onChange(e.target.value)}>
+        <option value="all">All {review.repos.length} repos</option>
+        {review.repos.map((repo, ri) => {
+          const n = comments(ri);
+          return (
+            <option key={ri} value={String(ri)}>
+              {repo.label}{hasBranch(repo) ? ' on ' + repo.branch : ''} ({plural(repo.files.length, 'file')}{n ? ', ' + plural(n, 'comment') : ''})
+            </option>
+          );
+        })}
+      </select>
+    </span>
   );
 }
 
@@ -291,12 +312,19 @@ function App() {
     setDone({ verdict, n: body.comments.length });
   }
 
+  // A saved view can point at a repo that isn't in this review any more.
+  const view = review && state.view !== 'all' && review.repos[Number(state.view)] ? state.view : 'all';
+  const visible = useCallback((ri) => view === 'all' || String(ri) === view, [view]);
+  const onView = useCallback((v) => { update((st) => ({ ...st, view: v })); window.scrollTo(0, 0); }, [update]);
   const totals = useMemo(() => {
     if (!review) return null;
     let files = 0, add = 0, del = 0;
-    for (const repo of review.repos) for (const f of repo.files) { files++; const st = fileStats(f); add += st.add; del += st.del; }
+    review.repos.forEach((repo, ri) => {
+      if (!visible(ri)) return;
+      for (const f of repo.files) { files++; const st = fileStats(f); add += st.add; del += st.del; }
+    });
     return { files, add, del };
-  }, [review]);
+  }, [review, visible]);
   const nComments = Object.keys(state.comments).length;
 
   if (done) {
@@ -315,8 +343,9 @@ function App() {
     <>
       <header className="bar">
         <span className="title">Review</span>
+        <RepoPicker review={review} view={view} byFile={byFile} onChange={onView} />
         <span className="stats">
-          <span>{plural(totals.files, 'file')} in {plural(review.repos.length, 'repo')}</span>
+          <span>{view === 'all' ? plural(totals.files, 'file') + ' in ' + plural(review.repos.length, 'repo') : plural(totals.files, 'file')}</span>
           <Counts add={totals.add} del={totals.del} />
         </span>
         {nComments > 0 && <span className="marks">{plural(nComments, 'comment')}</span>}
@@ -325,14 +354,14 @@ function App() {
         <button id="approve" className="btn approve" onClick={() => submit('approve')}>Approve</button>
       </header>
       <div className="layout">
-        <Tree review={review} byFile={byFile} />
+        <Tree review={review} visible={visible} byFile={byFile} />
         <main className="review">
           <section className="handoff">
             <p id="summary" className={'summary' + (review.summary ? '' : ' empty')}>{review.summary || 'The agent didn’t describe the change.'}</p>
             <Questions questions={review.questions} answers={state.answers} onAnswer={onAnswer} />
           </section>
           <p className="empty-note">Click a line number to comment on it. Shift-click a second one to cover a range.</p>
-          {review.repos.map((repo, ri) => (
+          {review.repos.map((repo, ri) => visible(ri) && (
             <section key={ri}>
               <div className="repo-head">
                 <h2>{repo.label}</h2>

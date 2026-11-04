@@ -95,6 +95,23 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.tree .repo')].map(e => e.querySelector('.label').textContent + ' ' + e.querySelector('.branch').textContent)`), ['web main', 'lib main']);
     assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('td.code')).fontFamily.includes('JetBrains Mono')`), true, 'bundled code font');
 
+    // The repo picker narrows the page and the file tree to one repo.
+    const pick = async (v) => {
+      await page.evaluate(`(() => {
+        const sel = document.querySelector('.picker select');
+        const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+        set.call(sel, ${JSON.stringify(v)});
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      })()`);
+    };
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.picker option')].map(o => o.textContent)`),
+      ['All 2 repos', 'web on main (1 file)', 'lib on main (1 file)']);
+    await pick('1');
+    await page.waitFor(`document.querySelectorAll('.file').length === 1 && !!document.getElementById('f1-0')`);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.tree .repo .label')].map(e => e.textContent)`), ['lib']);
+    await pick('all');
+    await page.waitFor(`document.querySelectorAll('.file').length === 2`);
+
     // Comment on line 2 of app.js (the added line) via the new-side gutter.
     await page.evaluate(`(() => {
       const row = [...document.querySelectorAll('#f0-0 tr')].find(tr => tr.children[1]?.textContent === '2');
