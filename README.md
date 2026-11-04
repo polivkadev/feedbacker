@@ -30,7 +30,7 @@ Then just say "let me review it" or run `/feedbacker:review`. To try it from a c
 ```json
 {
   "mcpServers": {
-    "feedbacker": { "command": "node", "args": ["/path/to/feedbacker/bin/feedbacker.mjs", "mcp"] }
+    "feedbacker": { "command": "npx", "args": ["-y", "agent-feedbacker", "mcp"] }
   }
 }
 ```
@@ -38,11 +38,10 @@ Then just say "let me review it" or run `/feedbacker:review`. To try it from a c
 ### CLI
 
 ```bash
-git clone https://github.com/PavlikPolivka/feedbacker && cd feedbacker
-npm link            # or call node bin/feedbacker.mjs directly
+npm install -g agent-feedbacker      # or run it once with: npx agent-feedbacker
 ```
 
-Node 20 or newer; git on `PATH`.
+The npm package is `agent-feedbacker`; the command is `feedbacker`. Node 22 or newer; git on `PATH`. From a checkout, `node bin/feedbacker.mjs` works too.
 
 ## Use
 
@@ -143,6 +142,18 @@ pnpm test
 Using Feedbacker needs none of this; only working on the page does. A test fails when `src/dist` doesn't match `src/ui`.
 
 The tests use real temporary git repos. They cover diff parsing, the HTTP server, the MCP protocol over stdio, and an end-to-end run that drives the page in headless Chromium (skipped when no Chromium is found; set `CHROMIUM=/path` to pick one).
+
+CI runs the tests on Node 22 and 24 for every push and pull request (`.github/workflows/ci.yml`).
+
+### Releasing
+
+Publishing to npm is done by GitHub Actions (`.github/workflows/publish.yml`) with npm trusted publishing, so no npm token is stored anywhere and each version gets a provenance statement.
+
+1. Bump `version` in `package.json` (and `.claude-plugin/plugin.json`), commit, push.
+2. Create a GitHub release with the tag `vX.Y.Z` matching that version: `gh release create v0.2.0 --generate-notes`.
+3. The workflow checks the tag, runs the tests and publishes.
+
+One-time setup: on npmjs.com, add a trusted publisher for the package (GitHub Actions, repository `PavlikPolivka/feedbacker`, workflow `publish.yml`). npm only offers that once the package exists, so the very first version is published by hand with `npm publish --access public`.
 
 Plans: [ROADMAP.md](ROADMAP.md).
 
