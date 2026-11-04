@@ -78,22 +78,30 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
   write(a, { 'app.js': 'function add(a, b) {\n  // sum\n  return a + b;\n}\n' });
   write(b, { 'notes.txt': 'one\ntwo\nthree\n' });
 
-  const cli = spawn(process.execPath, [BIN, '--no-open', a, b, '-m', 'Added a comment', '-q', 'Keep the comment?']);
+  const cli = spawn(process.execPath, [BIN, '--no-open', a, b,
+    '-m', 'Added a comment.\n\n- It explains the `add` function',
+    '-f', 'app.js:2=The new comment line',
+    '-q', 'Keep the comment?']);
   let stdout = '';
   cli.stdout.on('data', (d) => (stdout += d));
-  const url = await new Promise((ok) => cli.stderr.on('data', (d) => {
-    const m = String(d).match(/(http:\/\/127\.0\.0\.1\S+)/);
-    if (m) ok(m[1]);
-  }));
   const exited = new Promise((r) => cli.on('exit', r));
-
-  const page = await launch();
+  // However the test ends, stop the CLI and the browser, so a failure fails
+  // fast instead of leaving the test runner waiting on them.
+  let page;
   try {
+    const url = await new Promise((ok) => cli.stderr.on('data', (d) => {
+      const m = String(d).match(/(http:\/\/127\.0\.0\.1\S+)/);
+      if (m) ok(m[1]);
+    }));
+    page = await launch();
     await page.send('Page.navigate', { url });
     await page.waitFor(`document.querySelectorAll('.file').length === 2`);
 
-    // Highlighted, both repos, questions and summary shown.
-    assert.equal(await page.evaluate(`document.getElementById('summary').textContent`), 'Added a comment');
+    // Structured summary, the agent's focus, syntax highlighting, both repos.
+    assert.equal(await page.evaluate(`document.querySelector('#summary .summary-lead').textContent`), 'Added a comment.');
+    assert.equal(await page.evaluate(`document.querySelector('#summary li code').textContent`), 'add');
+    assert.equal(await page.evaluate(`document.querySelector('.focus-list a').textContent`), 'app.js:2');
+    assert.equal(await page.evaluate(`document.querySelector('#f0-0 tr.agent-note .text').textContent`), 'The new comment line');
     assert.ok(await page.evaluate(`!!document.querySelector('.file td.code [class^=hljs-]')`), 'syntax highlighting applied');
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.tree .repo')].map(e => e.querySelector('.label').textContent + ' ' + e.querySelector('.branch').textContent)`), ['web main', 'lib main']);
     assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('td.code')).fontFamily.includes('JetBrains Mono')`), true, 'bundled code font');
@@ -125,7 +133,13 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     await page.evaluate(`document.querySelector('tr.comment button.primary').click()`);
     await page.waitFor(`document.querySelector('tr.comment .cbody')?.textContent === 'Drop this comment'`);
 
-    // Range comment on lines 1-3 of notes.txt with shift-click.
+    // notes.txt is a docs file: collapsed until the Docs chip opens it.
+    assert.equal(await page.evaluate(`!!document.querySelector('#f1-0 table')`), false);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.chip')].map(c => c.textContent + ':' + c.getAttribute('aria-pressed'))`), ['Code 1:true', 'Docs 1:false']);
+    await page.evaluate(`[...document.querySelectorAll('.chip')].find(c => c.textContent.startsWith('Docs')).click()`);
+    await page.waitFor(`!!document.querySelector('#f1-0 table')`);
+
+    // A question on lines 1-3 of notes.txt (shift-click for the range).
     await page.evaluate(`(() => {
       const rows = [...document.querySelectorAll('#f1-0 tr')];
       const cell = (n) => rows.find(tr => tr.children[1]?.textContent === String(n)).children[1];
@@ -133,9 +147,10 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
       cell(3).dispatchEvent(new MouseEvent('click', { shiftKey: true, bubbles: true }));
     })()`);
     await page.waitFor(`!!document.querySelector('#f1-0 tr.comment textarea')`);
-    await page.type('#f1-0 tr.comment textarea', 'Whole file is odd');
-    await page.evaluate(`document.querySelector('#f1-0 tr.comment button.primary').click()`);
+    await page.type('#f1-0 tr.comment textarea', 'Why these three lines?');
+    await page.evaluate(`document.querySelector('#f1-0 tr.comment button.ask').click()`);
     await page.waitFor(`document.querySelectorAll('tr.comment .cbody').length === 2`);
+    assert.equal(await page.evaluate(`document.querySelector('#f1-0 .kind-pill')?.textContent`), 'Question');
     assert.equal(await page.evaluate(`document.querySelectorAll('.tree .count')[0].textContent`), '1');
 
     // Comments survive a reload.
@@ -157,7 +172,8 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     await page.evaluate(`document.getElementById('changes').click()`);
     await page.waitFor(`document.querySelector('.done .stamp')?.textContent === 'Changes requested'`);
   } finally {
-    page.close();
+    page?.close();
+    if (cli.exitCode === null) setTimeout(() => cli.kill(), 2000).unref();
   }
 
   assert.equal(await exited, 0);
@@ -165,6 +181,7 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
   assert.match(stdout, /## General\n\nAlmost there/);
   assert.match(stdout, /\*\*Q: Keep the comment\?\*\*\n\nNo/);
   assert.match(stdout, /\*\*app\.js:2\*\* \(new side\)\n\n```diff\n\+  \/\/ sum\n```\n\nDrop this comment, please/);
-  assert.match(stdout, /\*\*notes\.txt:1-3\*\* \(new side\)\n\n```diff\n\+one\n\+two\n\+three\n```\n\nWhole file is odd/);
-  assert.ok(stdout.indexOf('/web') < stdout.indexOf('/lib'));
+  assert.match(stdout, /## Questions from the reviewer\n\n.*Answer each one[^\n]*\n\n### \S+\/lib\n\n\*\*notes\.txt:1-3\*\* \(new side\)\n\n```diff\n\+one\n\+two\n\+three\n```\n\nWhy these three lines\?/);
+  assert.ok(stdout.indexOf('## Questions from the reviewer') < stdout.indexOf('## Comments'));
+  assert.ok(stdout.indexOf('## Comments') < stdout.indexOf('## Answers to your questions'));
 });

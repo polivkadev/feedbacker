@@ -26,6 +26,8 @@
   --logo-ink: #1b1f2a;
   --on-marker: #3d2f00;
   --focus: #3355d6;
+  --agent: #3355d6;
+  --agent-soft: #eaeffd;
   --approve: #13795b;
   --approve-ink: #ffffff;
   --reject: #b4233c;
@@ -67,6 +69,8 @@
     --marker-soft: rgba(242, 212, 76, 0.16);
     --marker-ink: #f2d44c;
     --focus: #7d97ff;
+    --agent: #8fa6ff;
+    --agent-soft: #1b2236;
     --approve: #2f9e78;
     --reject: #c53a52;
 
@@ -163,6 +167,8 @@ button, textarea { font: inherit; color: inherit; }
   padding: 3px 6px; border-radius: 6px; color: var(--ink); text-decoration: none;
 }
 .tree a:hover { background: var(--panel); }
+.tree a.minor .path { color: var(--muted); }
+.tree a.focused .path { font-weight: 700; color: var(--ink); }
 .tree .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .tree .count { font-size: 12px; }
 .tree .count .marks { padding: 0 6px; font-size: 12px; }
@@ -172,14 +178,48 @@ button, textarea { font: inherit; color: inherit; }
 .review { padding: 28px 32px 120px; min-width: 0; }
 
 /* The handoff: what the agent says it did, and what it wants to know. */
-.handoff { max-width: 76ch; margin-bottom: 36px; }
-.handoff .from { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
-.summary { font-size: 21px; line-height: 1.5; margin: 0; white-space: pre-wrap; text-wrap: pretty; }
-.summary.empty { color: var(--muted); font-size: 17px; }
-.questions { margin-top: 24px; display: grid; gap: 14px; }
+/* The handoff: what the agent says it did, where to look, what it asks.
+   Long summaries stay readable: one lead paragraph, then normal text. */
+.handoff { max-width: 76ch; margin-bottom: 28px; }
+.summary { font-size: 15.5px; line-height: 1.6; text-wrap: pretty; }
+.summary > :first-child { margin-top: 0; }
+.summary p { margin: 0 0 10px; }
+.summary .summary-lead, .summary-lead { font-size: 19px; line-height: 1.5; margin: 0 0 12px; }
+.summary-lead.empty { color: var(--muted); font-size: 17px; }
+.summary h3 { font-size: 15px; margin: 18px 0 6px; }
+.summary ul, .summary ol { margin: 0 0 12px; padding-left: 22px; }
+.summary li { margin: 3px 0; }
+.summary code, .focus-list a, .focus-list .missing { font-family: var(--mono); font-size: 0.88em; }
+.summary code { background: var(--sunk); padding: 1px 5px; border-radius: 4px; }
+
+.handoff h3 { font-size: 15px; margin: 0 0 8px; }
+.focus-list { margin-top: 22px; padding: 12px 16px; border-left: 3px solid var(--agent); background: var(--agent-soft); border-radius: 0 8px 8px 0; }
+.focus-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.focus-list li { display: grid; gap: 1px; }
+.focus-list a { color: var(--agent); text-decoration: none; font-weight: 600; }
+.focus-list a:hover { text-decoration: underline; }
+.focus-list a .repo { font-family: var(--sans); font-weight: 700; color: var(--muted); margin-right: 6px; }
+.focus-list .missing { color: var(--muted); text-decoration: line-through; }
+.focus-list .why { color: var(--ink); }
+
+.questions { margin-top: 22px; display: grid; gap: 12px; }
 .question { border-left: 3px solid var(--line); padding: 2px 0 2px 16px; }
 .question.answered { border-left-color: var(--approve); }
 .question p { margin: 0 0 8px; font-weight: 700; white-space: pre-wrap; }
+
+/* Above the diffs: how to comment, and the kind filters. */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; margin-bottom: 4px; }
+.toolbar .empty-note { margin: 0; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.filters .lead { color: var(--muted); font-size: 13px; margin-right: 2px; }
+.chip {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 2px 10px;
+}
+.chip .n { font-weight: 500; margin-left: 2px; }
+.chip:hover { background: var(--panel); color: var(--ink); }
+.chip.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
 textarea {
   display: block; width: 100%; min-height: 64px; resize: vertical;
@@ -206,6 +246,15 @@ textarea:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3p
 .file.collapsed .fhead { border-bottom: none; border-radius: 10px; }
 .fhead .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .fhead .old { color: var(--muted); }
+.kind-tag { font: 12px var(--sans); color: var(--muted); background: var(--sunk); border-radius: 5px; padding: 0 6px; }
+.file.focused { border-color: color-mix(in srgb, var(--agent) 45%, var(--line)); }
+
+/* The agent's notes: blue, so they never mix with the reviewer's yellow marks. */
+tr.agent-note > td { padding: 6px 14px 6px 62px; background: var(--agent-soft); font: 14px/1.5 var(--sans); white-space: normal; }
+.agent-note.file-level { padding: 8px 14px; background: var(--agent-soft); border-bottom: 1px solid var(--line); font-size: 14px; }
+.agent-card { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; border-left: 3px solid var(--agent); padding-left: 10px; max-width: 90ch; }
+.agent-card .who { color: var(--agent); font-weight: 700; font-size: 13px; }
+.agent-card .lines { color: var(--muted); font-size: 12px; font-family: var(--mono); }
 /* Viewed: a checkbox per file; viewed files collapse and dim in the tree. */
 .viewed-box { display: inline-flex; align-items: center; gap: 6px; font: 13px var(--sans); color: var(--muted); cursor: pointer; white-space: nowrap; }
 .viewed-box input { accent-color: var(--approve); margin: 0; }
@@ -252,6 +301,12 @@ tr.comment > td { padding: 8px 14px 10px 62px; background: var(--panel); font: 1
 .note-card .meta .where { font-family: var(--mono); font-size: 12px; }
 .note-card .meta .actions { margin-left: auto; display: flex; gap: 2px; }
 .note-card p { margin: 0; white-space: pre-wrap; }
+/* A question for the agent: same card, the agent's blue edge. */
+.note-card.question-card { border-left-color: var(--agent); }
+.kind-pill { color: var(--agent); font-weight: 700; font-size: 12px; }
+.marks.ask { background: var(--agent-soft); color: var(--agent); }
+.btn.ask { border-color: var(--agent); color: var(--agent); background: transparent; }
+.btn.ask:hover { background: var(--agent-soft); }
 .form { max-width: 80ch; }
 .form .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .form .hint { color: var(--faint); font-size: 13px; margin-right: auto; }

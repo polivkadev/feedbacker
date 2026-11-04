@@ -122,7 +122,74 @@ export function loadRepo(spec) {
 
 // `worktrees` (globally or per repo) expands each repo into all its worktrees,
 // e.g. to review parallel agents' work together. Duplicates are dropped.
-export function buildReview({ repos = ['.'], summary = '', questions = [], worktrees = false }) {
+// What kind of file a path is, for the page's quick filters. Works on paths
+// only, for any language: tests by folder or file-name convention, docs and
+// agent instructions (CLAUDE.md, AGENTS.md), config, and generated files
+// (lock files, build output, minified, snapshots, binaries).
+const TEST_DIRS = /(^|\/)(tests?|__tests__|__mocks__|specs?|testdata|test-data|fixtures|e2e|testing)\//i;
+const TEST_FILES = [
+  /\.(test|spec|e2e|cy|stories|story)\.[^/]+$/i,      // app.test.ts, app.spec.js, x.e2e.ts, x.cy.ts, x.stories.tsx
+  /(^|\/)test_[^/]+\.py$/i, /_test\.(py|go|rb|exs?|dart|cpp|cc|c|rs)$/i, // test_x.py, x_test.go
+  /(Tests?|Spec|IT)\.(java|kt|kts|scala|groovy|cs|fs|vb|swift|php)$/,       // FooTest.java, FooTests.cs
+  /_spec\.rb$/i, /\.t$/,                               // foo_spec.rb, Perl foo.t
+];
+const GENERATED = [
+  /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|go\.sum|poetry\.lock|uv\.lock|Pipfile\.lock|Gemfile\.lock|composer\.lock|mix\.lock|flake\.lock|Podfile\.lock|packages\.lock\.json)$/,
+  /\.min\.(js|css)$/i, /\.map$/i, /\.snap$/i, /\.lock$/i,
+  /(^|\/)(dist|build|out|vendor|node_modules|generated|__generated__|\.next|target)\//,
+  /\.(pb\.go|g\.dart|generated\.\w+|designer\.cs)$/i, /_pb2\.py$/,
+];
+const DOCS = [
+  /\.(md|mdx|markdown|rst|adoc|txt|org)$/i,
+  /(^|\/)(docs?|documentation)\//i,
+  /(^|\/)(LICEN[CS]E|COPYING|NOTICE|AUTHORS|CHANGELOG|CHANGES|CODEOWNERS)(\.\w+)?$/i,
+];
+const CONFIG = [
+  /\.(json|jsonc|json5|ya?ml|toml|ini|cfg|conf|properties|env|editorconfig|xml|plist)$/i,
+  /(^|\/)\.[^/]+$/,                                     // dotfiles: .gitignore, .npmrc, .eslintrc
+  /(^|\/)\.(github|gitlab|circleci|vscode|idea|devcontainer|husky)\//,
+  /(^|\/)(Dockerfile|Containerfile|docker-compose[^/]*|Makefile|Justfile|Procfile|Brewfile)$/i,
+];
+
+export function classifyFile(file) {
+  const p = file.path || '';
+  if (file.binary) return 'generated';
+  if (GENERATED.some((re) => re.test(p))) return 'generated';
+  if (TEST_DIRS.test(p) || TEST_FILES.some((re) => re.test(p))) return 'test';
+  if (DOCS.some((re) => re.test(p))) return 'docs';
+  if (CONFIG.some((re) => re.test(p))) return 'config';
+  return 'code';
+}
+
+// The agent's pointers to what matters: [{ path, repo?, startLine?, endLine?,
+// note }]. `path` is relative to its repo or absolute. Each match is attached
+// to its file; review.focus keeps them in the agent's order for the page.
+function attachFocus(repos, focus) {
+  const out = [];
+  for (const raw of Array.isArray(focus) ? focus : []) {
+    const item = typeof raw === 'string' ? { path: raw } : raw || {};
+    const note = typeof item.note === 'string' ? item.note : '';
+    const want = String(item.path || '').replace(/^\.\//, '');
+    if (!want) continue;
+    const startLine = Number(item.startLine) || 0;
+    const endLine = Number(item.endLine) || startLine;
+    let hit = null;
+    repos.forEach((repo, ri) => {
+      if (hit || (item.repo && path.resolve(item.repo) !== repo.path && path.basename(repo.path) !== item.repo)) return;
+      const rel = path.isAbsolute(want) ? path.relative(repo.path, want) : want;
+      const fi = repo.files.findIndex((f) => f.path === rel || f.oldPath === rel);
+      if (fi >= 0) hit = { ri, fi };
+    });
+    // Matched entries show the repo-relative path, however the agent wrote it.
+    const shown = hit ? repos[hit.ri].files[hit.fi].path : want;
+    const entry = { path: shown, note, startLine, endLine, ...(hit || { ri: -1, fi: -1 }) };
+    if (hit) (repos[hit.ri].files[hit.fi].focus ||= []).push({ note, startLine, endLine });
+    out.push(entry);
+  }
+  return out;
+}
+
+export function buildReview({ repos = ['.'], summary = '', questions = [], focus = [], worktrees = false }) {
   const specs = [];
   for (const raw of repos) {
     const spec = parseSpec(raw);
@@ -141,7 +208,8 @@ export function buildReview({ repos = ['.'], summary = '', questions = [], workt
       ? path.join(path.basename(path.dirname(r.path)), name(r))
       : name(r);
   }
-  return { summary, questions, repos: loaded };
+  for (const r of loaded) for (const f of r.files) f.kind = classifyFile(f);
+  return { summary, questions, repos: loaded, focus: attachFocus(loaded, focus) };
 }
 
 export function hasChanges(review) {
@@ -161,14 +229,11 @@ export function toMarkdown(review, fb) {
   }
   out.push('');
   if (fb.general.trim()) out.push('## General', '', fb.general.trim(), '');
-  if (fb.answers.length) {
-    out.push('## Answers', '');
-    for (const a of fb.answers) out.push(`**Q: ${a.question}**`, '', a.answer.trim() || '_(no answer)_', '');
-  }
-  if (fb.comments.length) {
-    out.push('## Comments', '');
+  const questions = fb.comments.filter((c) => c.kind === 'question');
+  const comments = fb.comments.filter((c) => c.kind !== 'question');
+  const byRepo = (list) => {
     for (const repo of review.repos) {
-      const cs = fb.comments.filter((c) => c.repo === repo.path);
+      const cs = list.filter((c) => c.repo === repo.path);
       if (!cs.length) continue;
       out.push(`### ${repo.path}`, '');
       for (const c of cs) {
@@ -176,6 +241,19 @@ export function toMarkdown(review, fb) {
         out.push(`**${c.file}:${lines}** (${c.side} side)`, '', '```diff', c.code, '```', '', c.body.trim(), '');
       }
     }
+  };
+  if (questions.length) {
+    out.push('## Questions from the reviewer', '',
+      'The reviewer asks about this code. Answer each one in your reply. Change code only where a question shows something is wrong, and say so.', '');
+    byRepo(questions);
+  }
+  if (comments.length) {
+    out.push('## Comments', '');
+    byRepo(comments);
+  }
+  if (fb.answers.length) {
+    out.push('## Answers to your questions', '');
+    for (const a of fb.answers) out.push(`**Q: ${a.question}**`, '', a.answer.trim() || '_(no answer)_', '');
   }
   if (!fb.comments.length && !fb.general.trim() && !fb.answers.some((a) => a.answer.trim())) {
     out.push('_No comments._', '');
@@ -196,6 +274,7 @@ export function normalizeFeedback(review, fb) {
   const comments = (Array.isArray(fb.comments) ? fb.comments : []).map((c) => ({
     repo: str(c.repo), file: str(c.file), side: c.side === 'old' ? 'old' : 'new',
     startLine: Number(c.startLine) || 0, endLine: Number(c.endLine) || 0, code: str(c.code), body: str(c.body),
+    kind: c.kind === 'question' ? 'question' : 'comment',
   }));
   return { verdict: fb.verdict === 'approve' ? 'approve' : 'request_changes', general: str(fb.general), answers, comments };
 }

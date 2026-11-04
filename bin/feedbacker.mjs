@@ -19,7 +19,8 @@ and prints the feedback to stdout when the user submits.
                      branch as base, the diff starts where HEAD forked from it.
   -w, --worktrees    Also review every other worktree of each repo.
   -m, --summary TXT  What the agent changed, shown at the top.
-  -q, --question TXT A question for the user (repeatable).
+  -f, --focus SPEC   Where to look first: "path[:start[-end]]=why" (repeatable).
+  -q, --question TXT A decision you need from the user (repeatable; rarely).
   --json             Print JSON instead of markdown.
   --port N           Port to listen on (default: random).
   --no-open          Don't open the browser; only print the URL to stderr.
@@ -36,8 +37,16 @@ function fail(msg) {
   process.exit(1);
 }
 
+// "src/core.mjs:120-160=Merge logic" -> { path, startLine, endLine, note }
+function parseFocus(spec) {
+  const eq = spec.indexOf('=');
+  const where = eq < 0 ? spec : spec.slice(0, eq);
+  const m = where.match(/^(.*?)(?::(\d+)(?:-(\d+))?)?$/);
+  return { path: m[1], startLine: Number(m[2]) || 0, endLine: Number(m[3] || m[2]) || 0, note: eq < 0 ? '' : spec.slice(eq + 1) };
+}
+
 function parseArgs(argv) {
-  const opts = { repos: [], questions: [], summary: '', worktrees: false, json: false, port: 0, open: true };
+  const opts = { repos: [], questions: [], focus: [], summary: '', worktrees: false, json: false, port: 0, open: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => {
@@ -47,6 +56,7 @@ function parseArgs(argv) {
     if (a === '-h' || a === '--help') { console.log(USAGE); process.exit(0); }
     else if (a === '-m' || a === '--summary') opts.summary = next();
     else if (a === '-q' || a === '--question') opts.questions.push(next());
+    else if (a === '-f' || a === '--focus') opts.focus.push(parseFocus(next()));
     else if (a === '-w' || a === '--worktrees') opts.worktrees = true;
     else if (a === '--json') opts.json = true;
     else if (a === '--port') opts.port = Number(next());

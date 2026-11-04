@@ -126,7 +126,7 @@ test('normalizeFeedback: drops unknown fields and coerces types', () => {
   const fb = normalizeFeedback({ questions: ['a', 'b'] }, { verdict: 'whatever', answers: [{ answer: 5 }], comments: [{ body: 'x', startLine: '3', evil: 1 }] });
   assert.equal(fb.verdict, 'request_changes');
   assert.deepEqual(fb.answers, [{ question: 'a', answer: '' }, { question: 'b', answer: '' }]);
-  assert.deepEqual(Object.keys(fb.comments[0]).sort(), ['body', 'code', 'endLine', 'file', 'repo', 'side', 'startLine']);
+  assert.deepEqual(Object.keys(fb.comments[0]).sort(), ['body', 'code', 'endLine', 'file', 'kind', 'repo', 'side', 'startLine']);
   assert.equal(fb.comments[0].startLine, 3);
 });
 
@@ -213,3 +213,33 @@ test('base branch: diff starts at the fork point, so later commits on base are n
   assert.deepEqual(loadRepo(dir + '@main').files.map((f) => f.path), ['feature.txt']);
 });
 
+
+test('toMarkdown: reviewer questions come before comments and ask for answers', () => {
+  const review = { questions: [], repos: [{ path: '/r', branch: 'main', base: 'HEAD', files: [{ path: 'a.js' }] }] };
+  const fb = normalizeFeedback(review, { verdict: 'approve', comments: [
+    { repo: '/r', file: 'a.js', startLine: 1, endLine: 1, code: '+x', body: 'Why x?', kind: 'question' },
+    { repo: '/r', file: 'a.js', startLine: 2, endLine: 2, code: '+y', body: 'Rename y' },
+  ] });
+  const md = toMarkdown(review, fb);
+  assert.ok(md.indexOf('## Questions from the reviewer') < md.indexOf('## Comments'));
+  assert.match(md, /Answer each one in your reply/);
+  assert.match(md, /## Questions from the reviewer[\s\S]*Why x\?[\s\S]*## Comments[\s\S]*Rename y/);
+  assert.doesNotMatch(md, /## Answers to your questions/, 'no agent questions, no section');
+});
+
+test('buildReview: kinds per file and the agent focus matched to files', () => {
+  const dir = makeRepo({ 'src/app.js': '1\n', 'README.md': '# x\n' });
+  write(dir, { 'src/app.js': '1\n2\n', 'README.md': '# y\n', 'src/app.test.js': 't\n' });
+  const review = buildReview({ repos: [dir], focus: [
+    { path: 'src/app.js', startLine: 2, note: 'The new line' },
+    { path: path.join(dir, 'README.md'), note: 'Absolute path works' },
+    { path: 'nope.js', note: 'Not changed' },
+  ] });
+  const files = Object.fromEntries(review.repos[0].files.map((f) => [f.path, f]));
+  assert.equal(files['src/app.js'].kind, 'code');
+  assert.equal(files['src/app.test.js'].kind, 'test');
+  assert.equal(files['README.md'].kind, 'docs');
+  assert.deepEqual(files['src/app.js'].focus, [{ note: 'The new line', startLine: 2, endLine: 2 }]);
+  assert.equal(files['README.md'].focus[0].note, 'Absolute path works');
+  assert.deepEqual(review.focus.map((f) => f.ri), [0, 0, -1], 'unmatched focus kept, without a file');
+});

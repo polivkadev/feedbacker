@@ -15,7 +15,8 @@ const TOOL = {
     'Open a merge-request-style review page in the user\'s browser with the diffs of the given git repos ' +
     '(working tree, including untracked files, against a base). The user comments on lines, answers your ' +
     'questions and submits. Blocks until they do, then returns their feedback as markdown: a verdict ' +
-    '(approved / changes requested), a general comment, answers, and line comments with the code they refer to. ' +
+    '(approved / changes requested), a general comment, line comments with the code they refer to, and questions the ' +
+    'user asks about the code, which you must answer in your reply. ' +
     'Pass every repo and worktree you changed in this session, as absolute paths.',
   inputSchema: {
     type: 'object',
@@ -36,8 +37,23 @@ const TOOL = {
           required: ['path'],
         },
       },
-      summary: { type: 'string', description: 'Short summary of what you changed and why, shown at the top of the page.' },
-      questions: { type: 'array', items: { type: 'string' }, description: 'Questions for the user to answer next to the diff.' },
+      summary: { type: 'string', description: 'What you changed and why, shown at the top of the page. Markdown: paragraphs, "- " lists, `code`, **bold**, "### " subheadings. Lead with one or two sentences; put details in a list.' },
+      focus: {
+        type: 'array',
+        description: 'Where the user should look first: the main logic, risky or non-obvious changes. Two to six entries; leave out tests, docs and config unless they are the point.',
+        items: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'File path, relative to its repo (or absolute).' },
+            repo: { type: 'string', description: 'Repo path or folder name, when the same path exists in several repos.' },
+            startLine: { type: 'integer', description: 'First line (new side) of the part to look at.' },
+            endLine: { type: 'integer', description: 'Last line (new side).' },
+            note: { type: 'string', description: 'Why it matters, in one sentence.' },
+          },
+          required: ['path', 'note'],
+        },
+      },
+      questions: { type: 'array', items: { type: 'string' }, description: 'Only for a decision you cannot make without the user. Usually leave this out: the user asks you questions on the page instead.' },
     },
     required: ['repos'],
   },
@@ -65,6 +81,7 @@ async function callTool(id, params) {
     repos: args.repos.map((r) => (typeof r === 'string' ? r : { path: r.path, base: r.base, worktrees: r.worktrees, exact: r.exact, session: r.session })),
     summary: args.summary || '',
     questions: Array.isArray(args.questions) ? args.questions.map(String) : [],
+    focus: Array.isArray(args.focus) ? args.focus : [],
   });
   const errors = review.repos.filter((r) => r.error).map((r) => `${r.path}: ${r.error}`);
   if (!hasChanges(review) && !review.questions.length) {

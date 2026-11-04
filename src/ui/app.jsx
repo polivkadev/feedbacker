@@ -6,16 +6,34 @@ import { createRoot } from 'react-dom/client';
 import { highlightFile } from './highlight.js';
 import { escapeHtml, markRanges, wordMarks } from './wordDiff.js';
 import { Brand } from './Logo.jsx';
+import { Summary } from './Summary.jsx';
 import './styles.css';
 
 const token = new URLSearchParams(location.search).get('t');
 const storeKey = 'feedbacker:' + token;
 const STATUS = { added: 'A', deleted: 'D', renamed: 'R', modified: 'M' };
 const EMPTY = [];
+// File kinds (set by the server from the path), in display order. Only code
+// starts expanded; the chips at the top open or close a whole kind.
+const KINDS = [
+  { id: 'code', label: 'Code', open: true },
+  { id: 'test', label: 'Tests', open: false },
+  { id: 'config', label: 'Config', open: false },
+  { id: 'docs', label: 'Docs', open: false },
+  { id: 'generated', label: 'Generated', open: false, title: 'Lock files, build output, minified and binary files' },
+];
+const KIND_ORDER = Object.fromEntries(KINDS.map((k, i) => [k.id, i]));
+
+// Files of a repo in review order: the agent's focus first, then by kind,
+// keeping git's order otherwise. Returns indexes into repo.files.
+function fileOrder(repo) {
+  const rank = (f) => (f.focus?.length ? -1 : KIND_ORDER[f.kind] ?? 0);
+  return repo.files.map((f, fi) => fi).sort((a, b) => rank(repo.files[a]) - rank(repo.files[b]) || a - b);
+}
 
 // Saved so a refresh doesn't lose work. comments: id -> comment.
 function loadState() {
-  const empty = { comments: {}, answers: {}, general: '', nextId: 1, view: 'all', viewed: {} };
+  const empty = { comments: {}, answers: {}, general: '', nextId: 1, view: 'all', viewed: {}, kinds: {}, open: {} };
   try { return { ...empty, ...JSON.parse(localStorage.getItem(storeKey)) }; } catch { return empty; }
 }
 
@@ -65,22 +83,24 @@ function Code({ row, hl, words }) {
 }
 
 // Uncontrolled, so typing doesn't re-render the diff.
-function CommentForm({ label, initial, editing, draftRef, onSave, onCancel }) {
+// Ask: a question the agent answers. Comment: something to act on.
+function CommentForm({ label, initial, editing, editingKind, draftRef, onSave, onCancel }) {
   const ta = useRef(null);
-  const save = () => ta.current.value.trim() && onSave(ta.current.value);
+  const save = (kind) => ta.current.value.trim() && onSave(ta.current.value, kind);
   const keys = (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save(e.shiftKey ? 'question' : editingKind || 'comment');
     if (e.key === 'Escape') onCancel();
   };
   return (
     <tr className="comment"><td colSpan={3}>
       <div className="form">
-        <textarea ref={ta} autoFocus defaultValue={initial} placeholder={'Comment on ' + label}
+        <textarea ref={ta} autoFocus defaultValue={initial} placeholder={'Comment on ' + label + ', or ask the agent about it'}
           onInput={(e) => (draftRef.current = e.target.value)} onKeyDown={keys} />
         <div className="row">
-          <span className="hint">Ctrl+Enter to save, Esc to cancel</span>
+          <span className="hint">Ctrl+Enter comments, Ctrl+Shift+Enter asks</span>
           <button className="btn quiet small" onClick={onCancel}>Cancel</button>
-          <button className="btn primary small" onClick={save}>{editing ? 'Save' : 'Comment'}</button>
+          <button className="btn small ask" onClick={() => save('question')}>{editing && editingKind === 'question' ? 'Save question' : 'Ask'}</button>
+          <button className="btn primary small" onClick={() => save('comment')}>{editing && editingKind !== 'question' ? 'Save comment' : 'Comment'}</button>
         </div>
       </div>
     </td></tr>
@@ -90,8 +110,9 @@ function CommentForm({ label, initial, editing, draftRef, onSave, onCancel }) {
 function CommentRow({ id, c, onEdit, onDelete }) {
   return (
     <tr className="comment"><td colSpan={3}>
-      <div className="note-card">
+      <div className={'note-card' + (c.kind === 'question' ? ' question-card' : '')}>
         <div className="meta">
+          {c.kind === 'question' && <span className="kind-pill">Question</span>}
           <span className="where">{lineLabel(c)}</span>
           <span className="actions">
             <button className="btn quiet small edit" onClick={() => onEdit(id)}>Edit</button>
@@ -104,16 +125,27 @@ function CommentRow({ id, c, onEdit, onDelete }) {
   );
 }
 
-const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftRef, label, viewed, onViewed, onSelect, onSave, onCancel, onEdit, onDelete }) {
-  // Large and minified files start collapsed.
+const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftRef, label, editingKind, viewed, open, onOpen, onViewed, onSelect, onSave, onCancel, onEdit, onDelete }) {
+  // Large and minified files hide their diff until asked.
   const minified = useMemo(() => file.rows.some((r) => r.s.length > 1000), [file]);
   const [shown, setShown] = useState(file.rows.length <= 2000 && !minified);
-  // Viewed files start (and get) collapsed.
-  const [open, setOpen] = useState(!viewed);
   const hl = useMemo(() => (shown ? highlightFile(file) : null), [file, shown]);
   const words = useMemo(() => (shown ? wordMarks(file.rows) : null), [file, shown]);
-  const toggleViewed = (e) => { onViewed(fk, e.target.checked); setOpen(!e.target.checked); };
+  const toggleViewed = (e) => onViewed(fk, e.target.checked);
   const stats = useMemo(() => fileStats(file), [file]);
+  // The agent's notes: on a line range (shown above its first line) or on the whole file.
+  const notes = file.focus || EMPTY;
+  const { noteAt, fileNotes } = useMemo(() => {
+    const at = new Map(), whole = [];
+    for (const n of notes) {
+      // Above the first diff row inside the range, else the first row after it, else on the file.
+      const i = !n.startLine ? -1 : file.rows.findIndex((r) => r.n != null && r.n >= n.startLine && r.n <= (n.endLine || n.startLine));
+      const j = i >= 0 || !n.startLine ? i : file.rows.findIndex((r) => r.n != null && r.n >= n.startLine);
+      if (j >= 0) (at.get(j) || at.set(j, []).get(j)).push(n);
+      else whole.push(n);
+    }
+    return { noteAt: at, fileNotes: whole };
+  }, [file, notes]);
 
   const rows = [];
   if (shown && open) {
@@ -121,6 +153,9 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
       if (row.t === 'h') {
         rows.push(<tr key={'h' + i} className="hunk"><td className="ln" /><td className="ln" /><td className="code">{row.s}</td></tr>);
         return;
+      }
+      for (const n of noteAt.get(i) || EMPTY) {
+        rows.push(<tr key={'n' + i + n.note} className="agent-note"><td colSpan={3}><AgentNote n={n} /></td></tr>);
       }
       const cls = [row.t === '+' ? 'add' : row.t === '-' ? 'del' : '', sel && i >= sel.a && i <= sel.b ? 'sel' : ''].join(' ').trim();
       const click = (e) => onSelect(fk, i, e.shiftKey);
@@ -135,16 +170,16 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
         if (c.b === i && sel?.editing !== id) rows.push(<CommentRow key={id} id={id} c={c} onEdit={onEdit} onDelete={onDelete} />);
       }
       if (sel && sel.b === i) {
-        rows.push(<CommentForm key="form" label={label} initial={draftRef.current} editing={!!sel.editing}
+        rows.push(<CommentForm key="form" label={label} initial={draftRef.current} editing={!!sel.editing} editingKind={editingKind}
           draftRef={draftRef} onSave={onSave} onCancel={onCancel} />);
       }
     });
   }
 
   return (
-    <div className={'file' + (open ? '' : ' collapsed') + (viewed ? ' viewed' : '')} id={domId}>
+    <div className={'file' + (open ? '' : ' collapsed') + (viewed ? ' viewed' : '') + (notes.length ? ' focused' : '')} id={domId}>
       <div className="fhead">
-        <button className="fold" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={(open ? 'Collapse ' : 'Expand ') + file.path}>
+        <button className="fold" onClick={() => onOpen(fk, !open)} aria-expanded={open} aria-label={(open ? 'Collapse ' : 'Expand ') + file.path}>
           {open ? '▾' : '▸'}
         </button>
         <span className={'st ' + file.status}>{STATUS[file.status]}</span>
@@ -152,12 +187,14 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
           {file.status === 'renamed' && <span className="old">{file.oldPath} → </span>}
           {file.path}
         </span>
+        {file.kind && file.kind !== 'code' && <span className="kind-tag">{KINDS.find((k) => k.id === file.kind)?.label}</span>}
         <Counts {...stats} />
         {comments.length > 0 && <span className="marks">{comments.length}</span>}
         <label className="viewed-box">
           <input type="checkbox" checked={!!viewed} onChange={toggleViewed} /> Viewed
         </label>
       </div>
+      {open && fileNotes.map((n, i) => <div key={i} className="agent-note file-level"><AgentNote n={n} /></div>)}
       {open && file.binary && <div className="fnote">Binary file, not shown.</div>}
       {open && !file.binary && !file.rows.length && <div className="fnote">Only the file mode or name changed.</div>}
       {open && !shown && (
@@ -171,6 +208,61 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
   );
 });
 
+function AgentNote({ n }) {
+  return (
+    <div className="agent-card">
+      <span className="who">Agent</span>
+      {n.startLine > 0 && <span className="lines">{n.endLine > n.startLine ? `lines ${n.startLine}–${n.endLine}` : `line ${n.startLine}`}</span>}
+      <span className="text">{n.note}</span>
+    </div>
+  );
+}
+
+// "Where to look": the agent's focus list, in its order, each a link to the
+// file (which is always expanded).
+function FocusList({ review }) {
+  const items = review.focus || EMPTY;
+  if (!items.length) return null;
+  return (
+    <div className="focus-list">
+      <h3>Where to look</h3>
+      <ul>
+        {items.map((f, i) => {
+          const where = f.path + (f.startLine ? ':' + f.startLine + (f.endLine > f.startLine ? '–' + f.endLine : '') : '');
+          const repo = f.ri >= 0 && review.repos.length > 1 ? review.repos[f.ri].label : null;
+          return (
+            <li key={i}>
+              {f.ri >= 0
+                ? <a href={'#f' + f.ri + '-' + f.fi}>{repo && <span className="repo">{repo}</span>}{where}</a>
+                : <span className="missing" title="Not among the changed files">{where}</span>}
+              {f.note && <span className="why">{f.note}</span>}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// Quick filters: one chip per kind present, open (pressed) or collapsed.
+function KindFilters({ counts, kinds, onToggle }) {
+  const present = KINDS.filter((k) => counts[k.id]);
+  if (present.length < 2) return null;
+  return (
+    <div className="filters" role="group" aria-label="Expand or collapse files by kind">
+      <span className="lead">Expanded:</span>
+      {present.map((k) => {
+        const on = kinds[k.id] ?? k.open;
+        return (
+          <button key={k.id} className={'chip' + (on ? ' on' : '')} aria-pressed={on} title={k.title} onClick={() => onToggle(k.id, !on)}>
+            {k.label} <span className="n">{counts[k.id]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Tree({ review, visible, byFile, viewed }) {
   return (
     <nav className="tree" aria-label="Changed files">
@@ -180,11 +272,13 @@ function Tree({ review, visible, byFile, viewed }) {
             <span className="label">{repo.label}</span>
             {hasBranch(repo) && <span className="branch">{repo.branch}</span>}
           </div>
-          {repo.files.map((file, fi) => {
+          {fileOrder(repo).map((fi) => {
+            const file = repo.files[fi];
             const n = byFile[ri + ':' + fi]?.length || 0;
             const seen = !!viewed[ri + ':' + fi];
+            const cls = [seen && 'viewed', file.kind !== 'code' && 'minor', file.focus?.length && 'focused'].filter(Boolean).join(' ');
             return (
-              <a key={fi} href={'#f' + ri + '-' + fi} title={file.path + (seen ? ' (viewed)' : '')} className={seen ? 'viewed' : undefined}>
+              <a key={fi} href={'#f' + ri + '-' + fi} title={file.path + (seen ? ' (viewed)' : '')} className={cls || undefined}>
                 <span className={'st ' + file.status}>{STATUS[file.status]}</span>
                 <span className="path"><bdi>{file.path}</bdi></span>
                 <span className="count">{n > 0 ? <span className="marks">{n}</span> : seen && <span className="tick" aria-label="viewed">✓</span>}</span>
@@ -227,6 +321,7 @@ function Questions({ questions, answers, onAnswer }) {
   if (!questions.length) return null;
   return (
     <div className="questions">
+      <h3>The agent asks</h3>
       {questions.map((q, i) => (
         <div className={'question' + ((answers[i] || '').trim() ? ' answered' : '')} key={i}>
           <p>{q}</p>
@@ -283,13 +378,13 @@ function App() {
     });
   }, []);
   const onCancel = useCallback(() => setSel(null), []);
-  const onSave = useCallback((body) => {
+  const onSave = useCallback((body, kind) => {
     const s = selRef.current;
     update((st) => {
       const id = s.editing || 'c' + st.nextId;
       return {
         ...st,
-        comments: { ...st.comments, [id]: { ...anchor(review, s.fk, s.a, s.b), body } },
+        comments: { ...st.comments, [id]: { ...anchor(review, s.fk, s.a, s.b), body, kind } },
         nextId: s.editing ? st.nextId : st.nextId + 1,
       };
     });
@@ -305,10 +400,27 @@ function App() {
     const { [id]: _, ...rest } = st.comments;
     return { ...st, comments: rest };
   }), [update]);
+  // Ticking Viewed collapses the file; unticking returns it to its default.
   const onViewed = useCallback((fk, v) => update((st) => {
-    const { [fk]: _, ...rest } = st.viewed;
-    return { ...st, viewed: v ? { ...rest, [fk]: true } : rest };
+    const { [fk]: _, ...viewed } = st.viewed;
+    const { [fk]: __, ...open } = st.open;
+    return { ...st, viewed: v ? { ...viewed, [fk]: true } : viewed, open };
   }), [update]);
+  const onOpen = useCallback((fk, v) => update((st) => ({ ...st, open: { ...st.open, [fk]: v } })), [update]);
+  // A kind chip opens or closes all files of that kind (dropping per-file choices).
+  const onKind = useCallback((kind, v) => update((st) => {
+    const open = Object.fromEntries(Object.entries(st.open).filter(([fk]) => {
+      const [ri, fi] = fk.split(':').map(Number);
+      return review.repos[ri]?.files[fi]?.kind !== kind;
+    }));
+    return { ...st, kinds: { ...st.kinds, [kind]: v }, open };
+  }), [review, update]);
+  const isOpen = (fk, file) => {
+    if (fk in state.open) return state.open[fk];
+    if (state.viewed[fk]) return false;
+    if (file.focus?.length) return true;
+    return state.kinds[file.kind] ?? KINDS.find((k) => k.id === file.kind)?.open ?? true;
+  };
   const onAnswer = useCallback((i, v) => update((st) => ({ ...st, answers: { ...st.answers, [i]: v } })), [update]);
 
   async function submit(verdict) {
@@ -344,7 +456,13 @@ function App() {
     });
     return { files, add, del, seen };
   }, [review, visible, state.viewed]);
-  const nComments = Object.keys(state.comments).length;
+  const kindCounts = useMemo(() => {
+    const out = {};
+    review?.repos.forEach((repo, ri) => visible(ri) && repo.files.forEach((f) => { out[f.kind] = (out[f.kind] || 0) + 1; }));
+    return out;
+  }, [review, visible]);
+  const nComments = Object.values(state.comments).filter((c) => c.kind !== 'question').length;
+  const nQuestions = Object.values(state.comments).filter((c) => c.kind === 'question').length;
 
   if (done) {
     return (
@@ -352,7 +470,7 @@ function App() {
         <Brand />
         <span className={'stamp ' + done.verdict}>{done.verdict === 'approve' ? 'Approved' : 'Changes requested'}</span>
         <h1>Sent to the agent</h1>
-        <p>{plural(done.n, 'comment')} went back with your verdict. You can close this tab.</p>
+        <p>{done.n ? plural(done.n, 'comment') + ' and question' + (done.n === 1 ? '' : 's') : 'No comments'} went back with your verdict. You can close this tab.</p>
       </div>
     );
   }
@@ -370,6 +488,7 @@ function App() {
           {totals.seen > 0 && <span>{totals.seen} of {totals.files} viewed</span>}
         </span>
         {nComments > 0 && <span className="marks">{plural(nComments, 'comment')}</span>}
+        {nQuestions > 0 && <span className="marks ask">{plural(nQuestions, 'question')}</span>}
         <span className="spacer" />
         <button id="changes" className="btn reject" onClick={() => submit('request_changes')}>Request changes</button>
         <button id="approve" className="btn approve" onClick={() => submit('approve')}>Approve</button>
@@ -378,10 +497,14 @@ function App() {
         <Tree review={review} visible={visible} byFile={byFile} viewed={state.viewed} />
         <main className="review">
           <section className="handoff">
-            <p id="summary" className={'summary' + (review.summary ? '' : ' empty')}>{review.summary || 'The agent didn’t describe the change.'}</p>
+            <Summary text={review.summary} />
+            <FocusList review={review} />
             <Questions questions={review.questions} answers={state.answers} onAnswer={onAnswer} />
           </section>
-          <p className="empty-note">Click a line number to comment on it. Shift-click a second one to cover a range.</p>
+          <div className="toolbar">
+            <p className="empty-note">Click a line number to comment or ask about it. Shift-click a second one to cover a range.</p>
+            <KindFilters counts={kindCounts} kinds={state.kinds} onToggle={onKind} />
+          </div>
           {review.repos.map((repo, ri) => visible(ri) && (
             <section key={ri}>
               <div className="repo-head">
@@ -391,13 +514,15 @@ function App() {
               </div>
               {repo.error && <p className="error">{repo.error}</p>}
               {!repo.error && !repo.files.length && <p className="empty-note">No changes in this repo.</p>}
-              {repo.files.map((file, fi) => {
+              {fileOrder(repo).map((fi) => {
+                const file = repo.files[fi];
                 const fk = ri + ':' + fi;
                 const fileSel = sel?.fk === fk ? sel : null;
                 return (
                   <FileDiff key={fk} fk={fk} domId={'f' + ri + '-' + fi} file={file}
                     comments={byFile[fk] || EMPTY} sel={fileSel} draftRef={draftRef}
-                    viewed={!!state.viewed[fk]} onViewed={onViewed}
+                    editingKind={fileSel?.editing ? state.comments[fileSel.editing]?.kind : null}
+                    viewed={!!state.viewed[fk]} onViewed={onViewed} open={isOpen(fk, file)} onOpen={onOpen}
                     label={fileSel ? lineLabel(anchor(review, fk, fileSel.a, fileSel.b)) : ''}
                     onSelect={onSelect} onSave={onSave} onCancel={onCancel} onEdit={onEdit} onDelete={onDelete} />
                 );

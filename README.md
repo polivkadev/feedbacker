@@ -48,8 +48,9 @@ The npm package is `agent-feedbacker`; the command is `feedbacker`. Node 22 or n
 
 ```bash
 feedbacker ~/Projects/api ~/Projects/web@main \
-  -m "Bind the API to localhost; document the port" \
-  -q "Should the port also be a CLI flag?"
+  -m $'Bind the API to localhost.\n\n- New `loadConfig()` reads HOST and PORT\n- README documents the port' \
+  -f 'src/server.ts:5-12=Where the host is bound' \
+  -f 'src/config.ts=Defaults live here'
 ```
 
 - `repo` diffs the working tree (staged, unstaged and untracked files) against `HEAD`.
@@ -65,9 +66,11 @@ feedbacker ~/Projects/api ~/Projects/web@main \
 
 In the browser:
 
+- The agent's summary is short markdown, with a lead sentence and a list. Under it, **Where to look** lists the places the agent thinks matter most; each links to the file, and the agent's note also appears in the diff above those lines.
+- Files are sorted by kind: the agent's focus first, then **Code**, then **Tests**, **Config**, **Docs** and **Generated** (lock files, build output, minified and binary files). The kind comes from the path and works across languages (`*.spec.ts`, `*_test.go`, `test_*.py`, `FooTest.java`, `__tests__/`, `CLAUDE.md`, …). Only Code starts expanded; the chips above the diffs open or close a whole kind.
 - In changed lines, the changed words are marked.
 - Tick **Viewed** on a file when you're done with it: it collapses, dims in the file tree, and the top bar counts how many you've viewed.
-- Click a line number to comment on that line (a highlighter "+" shows where); shift-click a second one to comment on a range. Ctrl+Enter saves, Esc cancels.
+- Click a line number to comment on that line (a highlighter "+" shows where); shift-click a second one to cover a range. Then **Comment** (something to change) or **Ask** (a question the agent must answer). Ctrl+Enter comments, Ctrl+Shift+Enter asks, Esc cancels.
 - With several repos, the picker in the top bar switches between all of them and a single one (the summary, questions and your comments in other repos stay). The top bar also shows the size of the change and keeps **Approve** and **Request changes** in reach; files can be collapsed, and the file tree shows where your comments are.
 - Comments, answers and the general comment are kept in the browser's local storage until you submit, so a refresh loses nothing.
 - **Approve** or **Request changes** sends everything to the agent and closes the server.
@@ -79,8 +82,9 @@ In the browser:
 | Argument | Type | |
 |---|---|---|
 | `repos` | `[{ path, base?, worktrees? }]` | Required. Absolute paths; `base` defaults to `HEAD` (or, with the plugin's hooks, where the repo stood when the session started); `worktrees: true` adds all worktrees of that repo. (`exact` and `session` are set by the hook.) |
-| `summary` | string | Shown at the top of the page. |
-| `questions` | string[] | Shown with an answer box each. |
+| `summary` | string | Markdown: paragraphs, `- ` lists, `` `code` ``, `**bold**`, `### ` subheadings. The first paragraph is the lead. |
+| `focus` | `[{ path, note, startLine?, endLine?, repo? }]` | Where the user should look first, and why. `path` is relative to its repo or absolute. |
+| `questions` | string[] | Only for a decision the agent can't make alone; usually left out. |
 
 It blocks until the user submits (Claude Code keeps long MCP calls open; it sends progress notifications every 30 s for clients that need them) and returns markdown like:
 
@@ -97,11 +101,19 @@ Reviewed:
 
 Almost there.
 
-## Answers
+## Questions from the reviewer
 
-**Q: Should the port also be a CLI flag?**
+The reviewer asks about this code. Answer each one in your reply. Change code only where a question shows something is wrong, and say so.
 
-No, env is enough.
+### /home/me/Projects/api
+
+**src/config.ts:4** (new side)
+
+```diff
++    host: env.HOST ?? "127.0.0.1",
+```
+
+Why not 0.0.0.0 inside containers?
 
 ## Comments
 
