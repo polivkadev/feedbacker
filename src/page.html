@@ -133,8 +133,9 @@ if (review.questions.length) {
 }
 
 review.repos.forEach((repo, ri) => {
-  nav.append(el('div', 'repo', repo.label));
-  const h = el('h2', 'repo', repo.label + ' ');
+  const branch = repo.branch && repo.branch !== 'HEAD' ? ' [' + repo.branch + ']' : '';
+  nav.append(el('div', 'repo', repo.label + branch));
+  const h = el('h2', 'repo', repo.label + branch + ' ');
   h.append(el('small', null, repo.path + (repo.base !== 'HEAD' ? ' vs ' + repo.base : '')));
   main.append(h);
   if (repo.error) { main.append(el('p', 'error', repo.error)); return; }

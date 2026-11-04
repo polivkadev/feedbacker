@@ -9,12 +9,12 @@ Feedbacker opens a review page in the user's browser with the diffs of the repos
 
 ## How
 
-1. List **every git repo you changed in this session**, as absolute paths. Include repos outside the current directory.
+1. List **every git repo and worktree you changed in this session**, as absolute paths. Include repos outside the current directory. If the work is spread over several worktrees of one repo (e.g. parallel agents), pass one of them with `"worktrees": true` instead of listing each.
 2. Pick a base per repo:
    - Uncommitted changes only: leave `base` out (it defaults to `HEAD`).
    - You committed during the session: use the commit the session started from (`git log` to find it) or the branch you forked from, e.g. `main`.
 3. Call the `request_review` tool of the `feedbacker` MCP server with:
-   - `repos`: `[{ "path": "/abs/path", "base": "main" }, ...]`
+   - `repos`: `[{ "path": "/abs/path", "base": "main", "worktrees": false }, ...]`
    - `summary`: two to five sentences on what you changed and why.
    - `questions`: only real decisions you want the user to make (optional).
 4. Before the call, tell the user a review page is opening in their browser. If it doesn't appear, they can run `node "${CLAUDE_PLUGIN_ROOT}/bin/feedbacker.mjs" list` to get its URL. The tool returns once they submit, however long that takes.

@@ -15,7 +15,7 @@ const TOOL = {
     '(working tree, including untracked files, against a base). The user comments on lines, answers your ' +
     'questions and submits. Blocks until they do, then returns their feedback as markdown: a verdict ' +
     '(approved / changes requested), a general comment, answers, and line comments with the code they refer to. ' +
-    'Pass every repo you changed in this session, as absolute paths.',
+    'Pass every repo and worktree you changed in this session, as absolute paths.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -27,7 +27,8 @@ const TOOL = {
           type: 'object',
           properties: {
             path: { type: 'string', description: 'Absolute path to the repo (or any folder inside it).' },
-            base: { type: 'string', description: 'Commit, branch or tag to diff against. Default HEAD (uncommitted changes only).' },
+            base: { type: 'string', description: 'Commit, branch or tag to diff against. Default HEAD (uncommitted changes only). With a branch, the diff starts where HEAD forked from it, like a merge request.' },
+            worktrees: { type: 'boolean', description: 'Also review every other git worktree of this repo (e.g. parallel agents\' work), each against the same base.' },
           },
           required: ['path'],
         },
@@ -58,7 +59,7 @@ async function callTool(id, params) {
     return toolError('`repos` must be a non-empty array of { path, base? }.');
   }
   const review = buildReview({
-    repos: args.repos.map((r) => (typeof r === 'string' ? r : { path: r.path, base: r.base })),
+    repos: args.repos.map((r) => (typeof r === 'string' ? r : { path: r.path, base: r.base, worktrees: r.worktrees })),
     summary: args.summary || '',
     questions: Array.isArray(args.questions) ? args.questions.map(String) : [],
   });

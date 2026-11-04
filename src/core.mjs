@@ -71,22 +71,38 @@ export function parseDiff(text) {
   return files;
 }
 
-// Accepts a path string ("repo" or "repo@base") or { path, base }.
-// The diff is the working tree (staged, unstaged and untracked) against base.
+// "repo", "repo@base" or { path, base, worktrees }.
+export function parseSpec(spec) {
+  if (typeof spec !== 'string') return { path: spec.path, base: spec.base || 'HEAD', worktrees: !!spec.worktrees };
+  const at = spec.lastIndexOf('@');
+  if (at > 0 && !fs.existsSync(spec)) return { path: spec.slice(0, at), base: spec.slice(at + 1) || 'HEAD', worktrees: false };
+  return { path: spec, base: 'HEAD', worktrees: false };
+}
+
+// Paths of all worktrees (main and linked) of the repo containing `dir`,
+// skipping bare repos and worktrees whose folder is gone.
+export function listWorktrees(dir) {
+  const out = git(path.resolve(dir), ['worktree', 'list', '--porcelain']);
+  return out.split('\n\n').map((block) => {
+    const lines = block.split('\n');
+    const p = lines.find((l) => l.startsWith('worktree '))?.slice(9);
+    if (!p || lines.includes('bare') || lines.some((l) => l.startsWith('prunable')) || !fs.existsSync(p)) return null;
+    return p;
+  }).filter(Boolean);
+}
+
+// The diff is the working tree (staged, unstaged and untracked) against the
+// point where HEAD forked from base (like a merge request), or base itself
+// when they share no history.
 export function loadRepo(spec) {
-  let p, base;
-  if (typeof spec === 'string') {
-    [p, base] = [spec, undefined];
-    const at = spec.lastIndexOf('@');
-    if (at > 0 && !fs.existsSync(spec)) [p, base] = [spec.slice(0, at), spec.slice(at + 1)];
-  } else {
-    ({ path: p, base } = spec);
-  }
-  base ||= 'HEAD';
-  const repo = { path: path.resolve(p), base, files: [], error: null };
+  const { path: p, base } = parseSpec(spec);
+  const repo = { path: path.resolve(p), base, branch: '', files: [], error: null };
   try {
     repo.path = git(repo.path, ['rev-parse', '--show-toplevel']).trim();
-    let text = git(repo.path, ['diff', ...DIFF_FLAGS, base, '--']);
+    repo.branch = git(repo.path, ['rev-parse', '--abbrev-ref', 'HEAD']).trim();
+    let from = git(repo.path, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`]).trim();
+    try { from = git(repo.path, ['merge-base', from, 'HEAD']).trim(); } catch {}
+    let text = git(repo.path, ['diff', ...DIFF_FLAGS, from, '--']);
     const untracked = git(repo.path, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
     for (const f of untracked) {
       text += git(repo.path, ['diff', ...DIFF_FLAGS, '--no-index', '--', '/dev/null', f], [0, 1]);
@@ -98,8 +114,20 @@ export function loadRepo(spec) {
   return repo;
 }
 
-export function buildReview({ repos = ['.'], summary = '', questions = [] }) {
-  const loaded = repos.map(loadRepo);
+// `worktrees` (globally or per repo) expands each repo into all its worktrees,
+// e.g. to review parallel agents' work together. Duplicates are dropped.
+export function buildReview({ repos = ['.'], summary = '', questions = [], worktrees = false }) {
+  const specs = [];
+  for (const raw of repos) {
+    const spec = parseSpec(raw);
+    let paths = [spec.path];
+    if (spec.worktrees || worktrees) {
+      try { paths = listWorktrees(spec.path); } catch {} // not a repo: loadRepo reports it
+    }
+    for (const p of paths) specs.push({ path: p, base: spec.base });
+  }
+  const seen = new Set();
+  const loaded = specs.map(loadRepo).filter((r) => !seen.has(r.path) && seen.add(r.path));
   const name = (r) => path.basename(r.path);
   for (const r of loaded) {
     // Short label for the UI; add the parent folder when two repos share a name.

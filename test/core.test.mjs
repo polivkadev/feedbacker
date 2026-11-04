@@ -160,3 +160,45 @@ test('listReviews: prunes files left by dead processes', () => {
   assert.deepEqual(listReviews(), []);
   assert.equal(fs.existsSync(path.join(dir, 'dead.json')), false);
 });
+
+test('worktrees: a worktree path is its own repo; --worktrees expands and dedupes', () => {
+  const main = makeRepo({ 'a.txt': 'base\n' }, 'proj');
+  const wt1 = path.join(path.dirname(main), 'proj-agent1');
+  const wt2 = path.join(path.dirname(main), 'proj-agent2');
+  sh(main, 'worktree', 'add', '-q', '-b', 'agent1', wt1);
+  sh(main, 'worktree', 'add', '-q', '-b', 'agent2', wt2);
+  write(wt1, { 'a.txt': 'agent one\n' });
+  write(wt2, { 'b.txt': 'agent two\n' });
+  commit(wt2, 'agent two work');
+
+  const one = loadRepo(wt1);
+  assert.equal(one.path, fs.realpathSync(wt1));
+  assert.equal(one.branch, 'agent1');
+  assert.deepEqual(one.files.map((f) => f.path), ['a.txt']);
+
+  // From any worktree, against main: all three, each with its own changes,
+  // committed work included; passing a worktree twice doesn't duplicate it.
+  const review = buildReview({ repos: [wt1 + '@main', wt2 + '@main'], worktrees: true });
+  assert.deepEqual(review.repos.map((r) => r.branch), ['main', 'agent1', 'agent2']);
+  assert.deepEqual(review.repos.map((r) => r.files.map((f) => f.path)), [[], ['a.txt'], ['b.txt']]);
+  assert.deepEqual(review.repos.map((r) => r.label), ['proj', 'proj-agent1', 'proj-agent2']);
+
+  // Per-repo flag (as the MCP tool passes it) does the same.
+  assert.equal(buildReview({ repos: [{ path: main, base: 'main', worktrees: true }] }).repos.length, 3);
+
+  // A removed worktree folder is skipped.
+  fs.rmSync(wt1, { recursive: true });
+  assert.equal(buildReview({ repos: [main], worktrees: true }).repos.length, 2);
+});
+
+test('base branch: diff starts at the fork point, so later commits on base are not shown reversed', () => {
+  const dir = makeRepo({ 'shared.txt': '1\n' });
+  sh(dir, 'checkout', '-q', '-b', 'feature');
+  write(dir, { 'feature.txt': 'mine\n' });
+  commit(dir, 'feature');
+  sh(dir, 'checkout', '-q', 'main');
+  write(dir, { 'shared.txt': '2\n' });
+  commit(dir, 'main moved on');
+  sh(dir, 'checkout', '-q', 'feature');
+  assert.deepEqual(loadRepo(dir + '@main').files.map((f) => f.path), ['feature.txt']);
+});

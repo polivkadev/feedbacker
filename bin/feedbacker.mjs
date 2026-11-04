@@ -12,8 +12,10 @@ const USAGE = `Usage: feedbacker [options] [repo[@base] ...]
 Opens a review page for the changes in each repo (default: current directory)
 and prints the feedback to stdout when the user submits.
 
-  repo[@base]        Repo path; diff the working tree (including untracked
-                     files) against base. Default base: HEAD.
+  repo[@base]        Repo or worktree path; diff the working tree (including
+                     untracked files) against base. Default base: HEAD. With a
+                     branch as base, the diff starts where HEAD forked from it.
+  -w, --worktrees    Also review every other worktree of each repo.
   -m, --summary TXT  What the agent changed, shown at the top.
   -q, --question TXT A question for the user (repeatable).
   --json             Print JSON instead of markdown.
@@ -30,7 +32,7 @@ function fail(msg) {
 }
 
 function parseArgs(argv) {
-  const opts = { repos: [], questions: [], summary: '', json: false, port: 0, open: true };
+  const opts = { repos: [], questions: [], summary: '', worktrees: false, json: false, port: 0, open: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => {
@@ -40,6 +42,7 @@ function parseArgs(argv) {
     if (a === '-h' || a === '--help') { console.log(USAGE); process.exit(0); }
     else if (a === '-m' || a === '--summary') opts.summary = next();
     else if (a === '-q' || a === '--question') opts.questions.push(next());
+    else if (a === '-w' || a === '--worktrees') opts.worktrees = true;
     else if (a === '--json') opts.json = true;
     else if (a === '--port') opts.port = Number(next());
     else if (a === '--no-open') opts.open = false;

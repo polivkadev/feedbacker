@@ -7,6 +7,7 @@ Feedbacker should stay small: one process, no build step, few or no dependencies
 - Multi-repo review page: diffs of working tree vs a base per repo, untracked files included, syntax highlighting, light and dark themes.
 - Line and range comments, answers to agent questions, general comment, Approve / Request changes. State survives a refresh.
 - CLI (`feedbacker`, `feedbacker list`), MCP server (`request_review`), Claude Code plugin (MCP + skill), marketplace entry.
+- Git worktrees: a worktree is reviewed like a repo; `--worktrees` / `worktrees: true` brings all worktrees of a repo into one review. Diffs against a branch start at the fork point.
 - Tests: unit, HTTP, MCP over stdio, headless-browser end to end. Checked once against a real Claude Code session.
 
 ## Next: make it pleasant in daily use
@@ -27,7 +28,6 @@ Feedbacker should stay small: one process, no build step, few or no dependencies
 
 ## Maybe
 
-- **Worktrees side by side**: parallel agents in several worktrees, one combined review.
 - **A `Stop` hook** that offers a review when repos changed and none was requested.
 - **Two-step tool** (`request_review` returns an id, `await_review` long-polls) for MCP clients with short tool timeouts. Claude Code doesn't need it: it kept a call open for over 3 minutes in testing without progress notifications.
 - **Structured output** (`structuredContent` with an output schema) alongside the markdown.

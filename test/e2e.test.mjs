@@ -87,7 +87,7 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     // Highlighted, both repos, questions and summary shown.
     assert.equal(await page.evaluate(`document.getElementById('summary').textContent`), 'Added a comment');
     assert.ok(await page.evaluate(`!!document.querySelector('.file .hljs span')`), 'syntax highlighting applied');
-    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('nav .repo')].map(e => e.textContent)`), ['web', 'lib']);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('nav .repo')].map(e => e.textContent)`), ['web [main]', 'lib [main]']);
 
     // Comment on line 2 of app.js (the added line) via the new-side gutter.
     await page.evaluate(`(() => {

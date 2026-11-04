@@ -2,7 +2,7 @@
 
 A local, merge-request-style review page for coding agents. The agent passes the git repos it changed, a summary and optionally some questions. You see the diffs of **all of them on one page**, comment on lines, answer the questions, and click **Approve** or **Request changes**. The agent gets your feedback back as markdown it can act on.
 
-- **Multi-repo**: any repos anywhere on disk, each with its own base.
+- **Multi-repo and worktrees**: any repos anywhere on disk, each with its own base; `--worktrees` pulls in every git worktree of a repo, so parallel agents' work is reviewed together.
 - **Simple**: one Node process, no build step, no runtime dependencies (highlight.js is vendored).
 - **Local**: binds to `127.0.0.1` with a random token in the URL. Nothing leaves your machine, and git is only read.
 - **Three ways in**: a Claude Code plugin (MCP tool + skill), a plain MCP server for other agents, and a CLI for anything with a shell.
@@ -53,7 +53,12 @@ feedbacker ~/Projects/api ~/Projects/web@main \
 ```
 
 - `repo` diffs the working tree (staged, unstaged and untracked files) against `HEAD`.
-- `repo@base` diffs against any commit, branch or tag, so work the agent already committed is included. Use the commit the session started from.
+- `repo@base` diffs against any commit, branch or tag, so work the agent already committed is included. With a branch, the diff starts where `HEAD` forked from it (like a merge request), so newer commits on that branch don't show up reversed.
+- A worktree path works like any repo. `-w` / `--worktrees` adds every worktree of each repo (main and linked, each labelled with its branch), all against the same base:
+
+  ```bash
+  feedbacker ~/Projects/api@main --worktrees   # main checkout + every agent's worktree
+  ```
 - The command blocks until you submit, then prints the feedback (`--json` for JSON) and exits 0. Exit 2 means there was nothing to review.
 - `feedbacker list` prints the URLs of reviews waiting for you, for when the browser didn't open (MCP clients usually hide a server's output).
 - `--no-open` only prints the URL; `--port` fixes the port.
@@ -70,7 +75,7 @@ In the browser:
 
 | Argument | Type | |
 |---|---|---|
-| `repos` | `[{ path, base? }]` | Required. Absolute paths; `base` defaults to `HEAD`. |
+| `repos` | `[{ path, base?, worktrees? }]` | Required. Absolute paths; `base` defaults to `HEAD`; `worktrees: true` adds all worktrees of that repo. |
 | `summary` | string | Shown at the top of the page. |
 | `questions` | string[] | Shown with an answer box each. |
 
