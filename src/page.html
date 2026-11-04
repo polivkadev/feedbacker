@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedbacker review</title>
+<link rel="stylesheet" href="/vendor/github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="/vendor/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="/vendor/highlight.min.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f2328; --muted: #656d76; --border: #d0d7de; --panel: #f6f8fa;
+    --add: #e6ffec; --add-ln: #ccffd8; --del: #ffebe9; --del-ln: #ffd7d5; --hunk: #ddf4ff;
+    --sel: #fff8c5; --accent: #0969da; --ok: #1a7f37; --warn: #cf222e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117; --fg: #e6edf3; --muted: #8d96a0; --border: #30363d; --panel: #161b22;
+      --add: #12261e; --add-ln: #1b4721; --del: #25171c; --del-ln: #542426; --hunk: #121d2f;
+      --sel: #3b2e00; --accent: #4493f8; --ok: #3fb950; --warn: #f85149;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  #summary { white-space: pre-wrap; margin: 0; color: var(--muted); }
+  #layout { display: flex; align-items: flex-start; }
+  nav { position: sticky; top: 0; width: 280px; flex: none; max-height: 100vh; overflow: auto; padding: 12px; border-right: 1px solid var(--border); }
+  nav .repo { font-weight: 600; margin: 8px 0 2px; word-break: break-all; }
+  nav a { display: flex; gap: 6px; color: var(--fg); text-decoration: none; padding: 1px 4px; border-radius: 4px; font-size: 13px; word-break: break-all; }
+  nav a:hover { background: var(--panel); }
+  nav .count { margin-left: auto; color: var(--accent); }
+  main { flex: 1; min-width: 0; padding: 16px 24px 200px; }
+  .st { font-family: ui-monospace, monospace; width: 1em; flex: none; }
+  .st.added { color: var(--ok); } .st.deleted { color: var(--warn); } .st.renamed { color: var(--accent); }
+  section.questions { border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; background: var(--panel); }
+  section.questions h2 { font-size: 16px; margin: 0 0 8px; }
+  .q { margin-bottom: 12px; } .q p { margin: 0 0 4px; font-weight: 600; white-space: pre-wrap; }
+  h2.repo { font-size: 16px; margin: 24px 0 8px; word-break: break-all; }
+  h2.repo small { color: var(--muted); font-weight: normal; }
+  .error { color: var(--warn); }
+  .file { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+  .file > .head { display: flex; gap: 8px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--border); font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; }
+  .file > .note { padding: 8px 12px; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font: 12px/20px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  td.ln { width: 1%; min-width: 44px; padding: 0 8px; text-align: right; color: var(--muted); user-select: none; cursor: pointer; vertical-align: top; }
+  td.ln:hover { color: var(--accent); }
+  td.code { white-space: pre; padding: 0 8px; }
+  td.code .mark { display: inline-block; width: 1.2em; color: var(--muted); user-select: none; }
+  .hljs { background: transparent; }
+  tr.add td { background: var(--add); } tr.add td.ln { background: var(--add-ln); }
+  tr.del td { background: var(--del); } tr.del td.ln { background: var(--del-ln); }
+  tr.hunk td { background: var(--hunk); color: var(--muted); }
+  tr.sel td { background: var(--sel) !important; }
+  tr.comment td { padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font: 14px/1.5 system-ui, sans-serif; white-space: normal; }
+  .cbody { white-space: pre-wrap; margin: 0 0 4px; }
+  .cmeta { color: var(--muted); font-size: 12px; }
+  textarea { width: 100%; min-height: 70px; padding: 6px 8px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; resize: vertical; }
+  button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--fg); cursor: pointer; }
+  button.primary { background: var(--ok); border-color: var(--ok); color: #fff; }
+  button.danger { background: var(--warn); border-color: var(--warn); color: #fff; }
+  button.link { border: none; background: none; color: var(--accent); padding: 0 4px; font-size: 12px; }
+  .actions { display: flex; gap: 8px; margin-top: 6px; justify-content: flex-end; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px 24px; background: var(--panel); border-top: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-end; }
+  footer textarea { min-height: 44px; height: 44px; }
+  footer .buttons { display: flex; gap: 8px; flex: none; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .done { max-width: 480px; margin: 20vh auto; text-align: center; }
+  @media (max-width: 800px) {
+    #layout { display: block; } nav { position: static; width: auto; max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+    header, main, footer { padding-left: 16px; padding-right: 16px; } footer { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Review</h1>
+  <p id="summary"></p>
+  <p class="hint">Click a line number to comment on it; shift-click another to comment on a range.</p>
+</header>
+<div id="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<footer>
+  <textarea id="general" placeholder="General comment (optional)"></textarea>
+  <div class="buttons">
+    <button id="changes" class="danger">Request changes</button>
+    <button id="approve" class="primary">Approve</button>
+  </div>
+</footer>
+<script type="module">
+const token = new URLSearchParams(location.search).get('t');
+const storeKey = 'feedbacker:' + token;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+// Saved so a refresh doesn't lose work. comments: id -> comment.
+let state = { comments: {}, answers: {}, general: '', nextId: 1 };
+try { state = { ...state, ...JSON.parse(localStorage.getItem(storeKey)) }; } catch {}
+function save() { try { localStorage.setItem(storeKey, JSON.stringify(state)); } catch {} }
+
+const review = await (await fetch('/api/review?t=' + token)).json();
+const files = {}; // file key "r:f" -> { repo, file, tbody, navCount }
+let sel = null;   // { fk, start, a, b, editing }
+
+document.getElementById('summary').textContent = review.summary || '';
+document.title = 'Review: ' + review.repos.map((r) => r.label).join(', ');
+
+const main = document.getElementById('main');
+const nav = document.getElementById('nav');
+
+if (review.questions.length) {
+  const sec = el('section', 'questions');
+  sec.append(el('h2', null, 'Questions from the agent'));
+  review.questions.forEach((q, i) => {
+    const box = el('div', 'q');
+    const ta = el('textarea');
+    ta.placeholder = 'Your answer';
+    ta.value = state.answers[i] || '';
+    ta.oninput = () => { state.answers[i] = ta.value; save(); };
+    box.append(el('p', null, q), ta);
+    sec.append(box);
+  });
+  main.append(sec);
+}
+
+review.repos.forEach((repo, ri) => {
+  nav.append(el('div', 'repo', repo.label));
+  const h = el('h2', 'repo', repo.label + ' ');
+  h.append(el('small', null, repo.path + (repo.base !== 'HEAD' ? ' vs ' + repo.base : '')));
+  main.append(h);
+  if (repo.error) { main.append(el('p', 'error', repo.error)); return; }
+  if (!repo.files.length) { main.append(el('p', 'hint', 'No changes.')); return; }
+  repo.files.forEach((file, fi) => {
+    const fk = ri + ':' + fi;
+    const st = { added: 'A', deleted: 'D', renamed: 'R', modified: 'M' }[file.status];
+    const box = el('div', 'file');
+    box.id = 'f' + ri + '-' + fi;
+    const head = el('div', 'head');
+    head.append(el('span', 'st ' + file.status, st), el('span', null, file.status === 'renamed' ? file.oldPath + ' → ' + file.path : file.path));
+    box.append(head);
+
+    const link = el('a');
+    link.href = '#' + box.id;
+    const navCount = el('span', 'count');
+    link.append(el('span', 'st ' + file.status, st), el('span', null, file.path), navCount);
+    nav.append(link);
+
+    if (file.binary) box.append(el('div', 'note', 'Binary file'));
+    else if (!file.rows.length) box.append(el('div', 'note', 'No content changes'));
+    const scroll = el('div', 'scroll');
+    const table = el('table');
+    const tbody = el('tbody');
+    table.append(tbody);
+    scroll.append(table);
+    box.append(scroll);
+    main.append(box);
+    files[fk] = { repo, file, tbody, navCount };
+    if (file.rows.length > 2000) {
+      const show = el('button', null, `Show large diff (${file.rows.length} lines)`);
+      show.onclick = () => { files[fk].shown = true; show.remove(); render(fk); };
+      box.insertBefore(show, scroll);
+    } else {
+      files[fk].shown = true;
+    }
+    render(fk);
+  });
+});
+
+// Syntax highlighting: highlight each side of the file as one text (so
+// multi-line strings and comments come out right), then split the HTML back
+// into lines, closing and reopening spans at each line break.
+function splitHtmlLines(html) {
+  const lines = [];
+  const open = [];
+  let cur = '';
+  for (const part of html.split(/(<span[^>]*>|<\/span>|\n)/)) {
+    if (part === '\n') { lines.push(cur + '</span>'.repeat(open.length)); cur = open.join(''); }
+    else if (part.startsWith('<span')) { open.push(part); cur += part; }
+    else if (part === '</span>') { open.pop(); cur += part; }
+    else cur += part;
+  }
+  lines.push(cur);
+  return lines;
+}
+
+function highlightFile(file) {
+  const ext = file.path.split('/').pop().split('.').pop().toLowerCase();
+  const lang = window.hljs && file.rows.length <= 5000 && hljs.getLanguage(ext) ? ext : null;
+  if (!lang) return null;
+  const sides = { o: [], n: [] };
+  for (const r of file.rows) {
+    if (r.t === '-') sides.o.push(r);
+    else if (r.t === '+' || r.t === ' ') sides.n.push(r);
+  }
+  const html = new Map();
+  for (const rows of Object.values(sides)) {
+    if (!rows.length) continue;
+    const out = splitHtmlLines(hljs.highlight(rows.map((r) => r.s).join('\n'), { language: lang, ignoreIllegals: true }).value);
+    rows.forEach((r, i) => html.set(r, out[i]));
+  }
+  return html;
+}
+
+function codeCell(row, html) {
+  const td = el('td', 'code');
+  td.append(el('span', 'mark', row.t === ' ' ? '' : row.t));
+  const code = el('span', html ? 'hljs' : null);
+  if (html?.has(row)) code.innerHTML = html.get(row);
+  else code.textContent = row.s;
+  td.append(code);
+  return td;
+}
+
+function commentsIn(fk) {
+  return Object.entries(state.comments).filter(([, c]) => c.fk === fk);
+}
+
+function render(fk) {
+  const { file, tbody, navCount, shown } = files[fk];
+  const list = commentsIn(fk);
+  navCount.textContent = list.length ? '💬' + list.length : '';
+  if (!shown) return;
+  if (files[fk].html === undefined) files[fk].html = highlightFile(file);
+  const rows = [];
+  file.rows.forEach((row, i) => {
+    if (row.t === 'h') {
+      const tr = el('tr', 'hunk');
+      tr.append(el('td', 'ln'), el('td', 'ln'), el('td', 'code', row.s));
+      rows.push(tr);
+      return;
+    }
+    const tr = el('tr', row.t === '+' ? 'add' : row.t === '-' ? 'del' : '');
+    if (sel && sel.fk === fk && i >= sel.a && i <= sel.b) tr.classList.add('sel');
+    const lo = el('td', 'ln', row.o ?? ''), ln = el('td', 'ln', row.n ?? '');
+    lo.onclick = ln.onclick = (e) => select(fk, i, e.shiftKey);
+    tr.append(lo, ln, codeCell(row, files[fk].html));
+    rows.push(tr);
+    for (const [id, c] of list) if (c.b === i && !(sel && sel.editing === id)) rows.push(commentRow(id, c));
+    if (sel && sel.fk === fk && sel.b === i) rows.push(formRow());
+  });
+  tbody.replaceChildren(...rows);
+}
+
+function select(fk, i, extend) {
+  const prev = sel?.fk;
+  if (extend && sel && sel.fk === fk && !sel.editing) {
+    sel = { ...sel, a: Math.min(sel.start, i), b: Math.max(sel.start, i) };
+  } else {
+    sel = { fk, start: i, a: i, b: i, editing: null, draft: '' };
+  }
+  if (prev && prev !== fk) render(prev);
+  render(fk);
+  files[fk].tbody.querySelector('tr.comment textarea')?.focus();
+}
+
+function anchor(fk, a, b) {
+  const { repo, file } = files[fk];
+  const rows = file.rows.slice(a, b + 1).filter((r) => r.t !== 'h');
+  const news = rows.filter((r) => r.n != null).map((r) => r.n);
+  const olds = rows.filter((r) => r.o != null).map((r) => r.o);
+  const nums = news.length ? news : olds;
+  return {
+    fk, a, b, repo: repo.path, file: file.path, side: news.length ? 'new' : 'old',
+    startLine: Math.min(...nums), endLine: Math.max(...nums),
+    code: rows.map((r) => r.t + r.s).join('\n'),
+  };
+}
+
+function lineLabel(c) {
+  return c.file + ':' + (c.startLine === c.endLine ? c.startLine : c.startLine + '-' + c.endLine);
+}
+
+function formRow() {
+  const tr = el('tr', 'comment');
+  const td = el('td');
+  td.colSpan = 3;
+  const ta = el('textarea');
+  ta.placeholder = 'Comment on ' + lineLabel(anchor(sel.fk, sel.a, sel.b));
+  ta.value = sel.draft;
+  ta.oninput = () => (sel.draft = ta.value);
+  const actions = el('div', 'actions');
+  const cancel = el('button', null, 'Cancel');
+  const ok = el('button', 'primary', sel.editing ? 'Save' : 'Comment');
+  cancel.onclick = () => { const fk = sel.fk; sel = null; render(fk); };
+  ok.onclick = () => {
+    if (!ta.value.trim()) return;
+    const fk = sel.fk;
+    const id = sel.editing || 'c' + state.nextId++;
+    state.comments[id] = { ...anchor(fk, sel.a, sel.b), body: ta.value };
+    sel = null;
+    save();
+    render(fk);
+  };
+  ta.onkeydown = (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) ok.click();
+    if (e.key === 'Escape') cancel.click();
+  };
+  actions.append(cancel, ok);
+  td.append(ta, actions);
+  tr.append(td);
+  return tr;
+}
+
+function commentRow(id, c) {
+  const tr = el('tr', 'comment');
+  const td = el('td');
+  td.colSpan = 3;
+  const meta = el('div', 'cmeta', lineLabel(c));
+  const edit = el('button', 'link', 'Edit');
+  const del = el('button', 'link', 'Delete');
+  edit.onclick = () => {
+    const prev = sel?.fk;
+    sel = { fk: c.fk, start: c.a, a: c.a, b: c.b, editing: id, draft: c.body };
+    if (prev && prev !== c.fk) render(prev);
+    render(c.fk);
+  };
+  del.onclick = () => { delete state.comments[id]; save(); render(c.fk); };
+  meta.append(edit, del);
+  td.append(el('p', 'cbody', c.body), meta);
+  tr.append(td);
+  return tr;
+}
+
+const general = document.getElementById('general');
+general.value = state.general;
+general.oninput = () => { state.general = general.value; save(); };
+
+async function submit(verdict) {
+  if (sel && sel.draft.trim() && !confirm('You have an unsaved comment. Submit without it?')) return;
+  const body = {
+    verdict,
+    general: state.general,
+    answers: review.questions.map((question, i) => ({ question, answer: state.answers[i] || '' })),
+    comments: Object.values(state.comments).map(({ fk, a, b, ...c }) => c),
+  };
+  const res = await fetch('/api/submit?t=' + token, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { alert('Sending failed: ' + res.status + '. Is the agent still waiting?'); return; }
+  try { localStorage.removeItem(storeKey); } catch {}
+  const n = body.comments.length;
+  const done = el('div', 'done');
+  done.append(el('h1', null, verdict === 'approve' ? 'Approved' : 'Changes requested'),
+    el('p', null, `Sent to the agent with ${n} comment${n === 1 ? '' : 's'}. You can close this tab.`));
+  document.body.replaceChildren(done);
+}
+document.getElementById('approve').onclick = () => submit('approve');
+document.getElementById('changes').onclick = () => submit('request_changes');
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "feedbacker",
+  "version": "0.1.0",
+  "description": "A local merge-request-style review page that coding agents open to collect your line comments and answers, across several git repos.",
+  "type": "module",
+  "bin": { "feedbacker": "bin/feedbacker.mjs" },
+  "files": ["bin", "src", "skills", ".claude-plugin", ".mcp.json"],
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "engines": { "node": ">=20" },
+  "repository": { "type": "git", "url": "git+https://github.com/PavlikPolivka/feedbacker.git" },
+  "keywords": ["claude-code", "mcp", "code-review", "diff", "agent"],
+  "author": "Pavel Polivka",
+  "license": "MIT"
+}

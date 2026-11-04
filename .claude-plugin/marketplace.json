@@ -1,0 +1,16 @@
+{
+  "name": "feedbacker",
+  "owner": {
+    "name": "Pavel Polivka"
+  },
+  "metadata": {
+    "description": "Feedbacker: review a coding agent's changes across several git repos in a local MR-style page."
+  },
+  "plugins": [
+    {
+      "name": "feedbacker",
+      "source": "./",
+      "description": "Review an agent's changes across several git repos in a local MR-style page and send line comments back to it."
+    }
+  ]
+}
