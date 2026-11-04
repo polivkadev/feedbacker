@@ -31,6 +31,8 @@ await esbuild.build({
   logLevel: 'warning',
 });
 
+fs.copyFileSync(path.join(root, 'src', 'ui', 'favicon.svg'), path.join(out, 'favicon.svg'));
+
 // Licences of everything in the bundle.
 const licences = ['react', 'react-dom', 'scheduler', 'highlight.js', '@fontsource-variable/atkinson-hyperlegible-next', '@fontsource-variable/jetbrains-mono'].map((name) => {
   const dir = path.dirname(require.resolve(`${name}/package.json`, { paths: [path.dirname(require.resolve('react-dom/package.json'))] }));

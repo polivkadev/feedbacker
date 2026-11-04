@@ -13,7 +13,7 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PAGE = path.join(DIR, 'page.html');
 // The page's bundle (src/dist, built by build.mjs). These files hold no
 // secrets, so they are served without the token. URL path -> file.
-const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.txt': 'text/plain' };
+const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.txt': 'text/plain' };
 const ASSETS = Object.fromEntries(
   fs.readdirSync(path.join(DIR, 'dist'), { recursive: true })
     .map((f) => f.split(path.sep).join('/'))

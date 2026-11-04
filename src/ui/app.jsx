@@ -4,6 +4,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { highlightFile } from './highlight.js';
+import { Brand } from './Logo.jsx';
 import './styles.css';
 
 const token = new URLSearchParams(location.search).get('t');
@@ -249,7 +250,7 @@ function App() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 403 ? 'Invalid or expired review link.' : 'HTTP ' + r.status))))
       .then((r) => {
         setReview(r);
-        document.title = 'Review: ' + r.repos.map((x) => x.label).join(', ');
+        document.title = r.repos.map((x) => x.label).join(', ') + ' – Feedbacker';
       })
       .catch((e) => setError(e.message === 'Failed to fetch' ? 'This review is closed.' : e.message));
   }, []);
@@ -330,19 +331,20 @@ function App() {
   if (done) {
     return (
       <div className="status done">
+        <Brand />
         <span className={'stamp ' + done.verdict}>{done.verdict === 'approve' ? 'Approved' : 'Changes requested'}</span>
         <h1>Sent to the agent</h1>
         <p>{plural(done.n, 'comment')} went back with your verdict. You can close this tab.</p>
       </div>
     );
   }
-  if (error) return <div className="status"><h1>This review isn't available</h1><p>{error}</p></div>;
-  if (!review) return <div className="status"><p>Loading the changes…</p></div>;
+  if (error) return <div className="status"><Brand /><h1>This review isn't available</h1><p>{error}</p></div>;
+  if (!review) return <div className="status"><Brand /><p>Loading the changes…</p></div>;
 
   return (
     <>
       <header className="bar">
-        <span className="title">Review</span>
+        <Brand />
         <RepoPicker review={review} view={view} byFile={byFile} onChange={onView} />
         <span className="stats">
           <span>{view === 'all' ? plural(totals.files, 'file') + ' in ' + plural(review.repos.length, 'repo') : plural(totals.files, 'file')}</span>

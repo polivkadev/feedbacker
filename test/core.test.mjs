@@ -134,8 +134,8 @@ test('startReview: token required, serves page, review and vendor files, resolve
 
   assert.equal((await fetch(u.origin + '/')).status, 403);
   assert.equal((await fetch(u.origin + '/api/review?t=wrong')).status, 403);
-  assert.match(await (await fetch(url)).text(), /<title>Feedbacker review<\/title>/);
-  for (const asset of ['/dist/app.js', '/dist/app.css']) {
+  assert.match(await (await fetch(url)).text(), /<title>Feedbacker<\/title>/);
+  for (const asset of ['/dist/app.js', '/dist/app.css', '/dist/favicon.svg']) {
     assert.equal((await fetch(u.origin + asset)).status, 200, asset);
   }
   assert.equal((await fetch(u.origin + '/dist/../core.mjs')).status, 403);
@@ -204,3 +204,4 @@ test('base branch: diff starts at the fork point, so later commits on base are n
   sh(dir, 'checkout', '-q', 'feature');
   assert.deepEqual(loadRepo(dir + '@main').files.map((f) => f.path), ['feature.txt']);
 });
+
