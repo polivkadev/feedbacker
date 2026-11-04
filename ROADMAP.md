@@ -36,7 +36,7 @@ Feedbacker should stay small: one process, no build step, nothing to install. If
 
 ## Known limits
 
-- Very large diffs (over 2000 rows per file) are collapsed behind a button; over 5000 rows aren't highlighted.
+- Very large diffs (over 2000 rows per file) and minified files (a line over 1000 characters) are collapsed behind a button; over 5000 rows aren't highlighted.
 - Binary files are listed but not shown.
 - The page is fetched once; if the agent changes files while you review, the diff doesn't refresh.
 - Comments are anchored to the diff as it was when the review opened.

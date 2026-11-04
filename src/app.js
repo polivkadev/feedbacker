@@ -107,7 +107,9 @@ function CommentRow({ id, c, onEdit, onDelete }) {
 }
 
 const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftRef, onSelect, onSave, onCancel, onEdit, onDelete, label }) {
-  const [shown, setShown] = useState(file.rows.length <= 2000);
+  // Large and minified files start collapsed.
+  const minified = useMemo(() => file.rows.some((r) => r.s.length > 1000), [file]);
+  const [shown, setShown] = useState(file.rows.length <= 2000 && !minified);
   const hl = useMemo(() => (shown ? highlightFile(file) : null), [file, shown]);
   const rows = [];
   if (shown) {
@@ -139,7 +141,9 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
     </div>
     ${file.binary && html`<div className="note">Binary file</div>`}
     ${!file.binary && !file.rows.length && html`<div className="note">No content changes</div>`}
-    ${!shown && html`<button onClick=${() => setShown(true)}>Show large diff (${file.rows.length} lines)</button>`}
+    ${!shown && html`<div className="note"><button onClick=${() => setShown(true)}>
+      ${minified ? 'Show minified file' : `Show large diff (${file.rows.length} lines)`}
+    </button></div>`}
     <div className="scroll"><table><tbody>${rows}</tbody></table></div>
   </div>`;
 });
