@@ -14,7 +14,7 @@ const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin',
 
 function findChromium() {
   if (process.env.CHROMIUM) return process.env.CHROMIUM;
-  for (const c of ['chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable']) {
+  for (const c of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) {
     try { return execFileSync('which', [c], { encoding: 'utf8' }).trim(); } catch {}
   }
   return null;
@@ -24,9 +24,12 @@ const chromium = findChromium();
 
 async function launch() {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'feedbacker-chrome-'));
-  const proc = spawn(chromium, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  // CI runners (Ubuntu 24.04) block Chrome's sandbox; locally keep it on.
+  const args = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', ...(process.env.CI ? ['--no-sandbox'] : []), 'about:blank'];
+  const proc = spawn(chromium, args, { stdio: ['ignore', 'ignore', 'pipe'] });
   const wsUrl = await new Promise((ok, no) => {
     let buf = '';
+    setTimeout(() => { proc.kill(); no(new Error('chromium did not start within 20 s: ' + buf)); }, 20_000).unref();
     proc.stderr.on('data', (d) => {
       buf += d;
       const m = buf.match(/DevTools listening on (ws:\S+)/);
@@ -69,7 +72,7 @@ async function launch() {
   return { send, evaluate, waitFor, type, close: () => { ws.close(); proc.kill(); } };
 }
 
-test('e2e: comment, answer and submit in the browser; CLI prints the feedback', { skip: !chromium && 'no Chromium found' }, async () => {
+test('e2e: comment, answer and submit in the browser; CLI prints the feedback', { skip: !chromium && 'no Chromium found', timeout: 60_000 }, async () => {
   const a = makeRepo({ 'app.js': 'function add(a, b) {\n  return a + b;\n}\n' }, 'web');
   const b = makeRepo({ 'README.md': '# Lib\n' }, 'lib');
   write(a, { 'app.js': 'function add(a, b) {\n  // sum\n  return a + b;\n}\n' });

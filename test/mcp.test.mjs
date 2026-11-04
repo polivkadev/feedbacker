@@ -41,7 +41,7 @@ function startServer() {
   };
 }
 
-test('mcp: initialize, list tools, review round trip', async () => {
+test('mcp: initialize, list tools, review round trip', { timeout: 30_000 }, async () => {
   const a = makeRepo({ 'a.py': 'x = 1\n' }, 'alpha');
   const b = makeRepo({ 'b.go': 'package b\n' }, 'beta');
   write(a, { 'a.py': 'x = 2\n' });
@@ -87,7 +87,7 @@ test('mcp: initialize, list tools, review round trip', async () => {
   }
 });
 
-test('mcp: errors for bad input, unknown tools and methods; cancellation', async () => {
+test('mcp: errors for bad input, unknown tools and methods; cancellation', { timeout: 30_000 }, async () => {
   const clean = makeRepo({ 'a': '1\n' });
   const dirty = makeRepo({ 'a': '1\n' });
   write(dirty, { 'a': '2\n' });
