@@ -199,7 +199,7 @@ function RepoPicker({ review, view, byFile, onChange }) {
           const n = comments(ri);
           return (
             <option key={ri} value={String(ri)}>
-              {repo.label}{hasBranch(repo) ? ' on ' + repo.branch : ''} ({plural(repo.files.length, 'file')}{n ? ', ' + plural(n, 'comment') : ''})
+              {repo.label}{hasBranch(repo) ? ' on ' + repo.branch : ''} ({repo.files.length ? plural(repo.files.length, 'file') : 'no changes'}{n ? ', ' + plural(n, 'comment') : ''})
             </option>
           );
         })}
