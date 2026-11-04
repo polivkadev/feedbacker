@@ -100,7 +100,8 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     // Structured summary, the agent's focus, syntax highlighting, both repos.
     assert.equal(await page.evaluate(`document.querySelector('#summary .summary-lead').textContent`), 'Added a comment.');
     assert.equal(await page.evaluate(`document.querySelector('#summary li code').textContent`), 'add');
-    assert.equal(await page.evaluate(`document.querySelector('.focus-list a').textContent`), 'app.js:2');
+    assert.equal(await page.evaluate(`document.querySelector('.focus-list a .repo').textContent`), 'web', 'repo named when there are several');
+    assert.equal(await page.evaluate(`document.querySelector('.focus-list a').lastChild.textContent`), 'app.js:2');
     assert.equal(await page.evaluate(`document.querySelector('#f0-0 tr.agent-note .text').textContent`), 'The new comment line');
     assert.ok(await page.evaluate(`!!document.querySelector('.file td.code [class^=hljs-]')`), 'syntax highlighting applied');
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.tree .repo')].map(e => e.querySelector('.label').textContent + ' ' + e.querySelector('.branch').textContent)`), ['web main', 'lib main']);
