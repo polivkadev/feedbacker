@@ -11,10 +11,15 @@ import { fileURLToPath } from 'node:url';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PAGE = path.join(DIR, 'page.html');
-const VENDOR = {
-  'highlight.min.js': 'text/javascript',
-  'github.min.css': 'text/css',
-  'github-dark.min.css': 'text/css',
+// Static files anyone may fetch (no secrets): URL path -> [file, content type].
+const ASSETS = {
+  '/app.js': ['app.js', 'text/javascript'],
+  '/vendor/highlight.min.js': ['vendor/highlight.min.js', 'text/javascript'],
+  '/vendor/react.production.min.js': ['vendor/react.production.min.js', 'text/javascript'],
+  '/vendor/react-dom.production.min.js': ['vendor/react-dom.production.min.js', 'text/javascript'],
+  '/vendor/htm.umd.js': ['vendor/htm.umd.js', 'text/javascript'],
+  '/vendor/github.min.css': ['vendor/github.min.css', 'text/css'],
+  '/vendor/github-dark.min.css': ['vendor/github-dark.min.css', 'text/css'],
 };
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '-M', '--src-prefix=a/', '--dst-prefix=b/'];
 
@@ -219,11 +224,10 @@ export function startReview(review, { port = 0, open = true } = {}) {
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
-    // Vendored libraries are public; everything else needs the token.
-    const asset = VENDOR[url.pathname.replace(/^\/vendor\//, '')];
-    if (req.method === 'GET' && url.pathname.startsWith('/vendor/') && asset) {
-      res.writeHead(200, { 'content-type': asset, 'cache-control': 'max-age=86400' })
-        .end(fs.readFileSync(path.join(DIR, 'vendor', url.pathname.slice(8))));
+    // Static assets are public; everything else needs the token.
+    const asset = req.method === 'GET' && ASSETS[url.pathname];
+    if (asset) {
+      res.writeHead(200, { 'content-type': asset[1], 'cache-control': 'no-cache' }).end(fs.readFileSync(path.join(DIR, asset[0])));
       return;
     }
     if (url.searchParams.get('t') !== token) {

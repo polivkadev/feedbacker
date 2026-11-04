@@ -61,7 +61,12 @@ async function launch() {
     }
     throw new Error('timed out waiting for ' + expression);
   };
-  return { send, evaluate, waitFor, close: () => { ws.close(); proc.kill(); } };
+  // Focus an element and type into it like a keyboard would.
+  const type = async (selector, text) => {
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus()`);
+    await send('Input.insertText', { text });
+  };
+  return { send, evaluate, waitFor, type, close: () => { ws.close(); proc.kill(); } };
 }
 
 test('e2e: comment, answer and submit in the browser; CLI prints the feedback', { skip: !chromium && 'no Chromium found' }, async () => {
@@ -95,11 +100,8 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
       row.children[1].click();
     })()`);
     await page.waitFor(`!!document.querySelector('tr.comment textarea')`);
-    await page.evaluate(`(() => {
-      const ta = document.querySelector('tr.comment textarea');
-      ta.value = 'Drop this comment'; ta.dispatchEvent(new Event('input'));
-      document.querySelector('tr.comment button.primary').click();
-    })()`);
+    await page.type('tr.comment textarea', 'Drop this comment');
+    await page.evaluate(`document.querySelector('tr.comment button.primary').click()`);
     await page.waitFor(`document.querySelector('tr.comment .cbody')?.textContent === 'Drop this comment'`);
 
     // Range comment on lines 1-3 of notes.txt with shift-click.
@@ -109,11 +111,9 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
       cell(1).click();
       cell(3).dispatchEvent(new MouseEvent('click', { shiftKey: true, bubbles: true }));
     })()`);
-    await page.evaluate(`(() => {
-      const ta = document.querySelector('#f1-0 tr.comment textarea');
-      ta.value = 'Whole file is odd'; ta.dispatchEvent(new Event('input'));
-      document.querySelector('#f1-0 tr.comment button.primary').click();
-    })()`);
+    await page.waitFor(`!!document.querySelector('#f1-0 tr.comment textarea')`);
+    await page.type('#f1-0 tr.comment textarea', 'Whole file is odd');
+    await page.evaluate(`document.querySelector('#f1-0 tr.comment button.primary').click()`);
     await page.waitFor(`document.querySelectorAll('tr.comment .cbody').length === 2`);
     assert.equal(await page.evaluate(`document.querySelectorAll('nav .count')[0].textContent`), '💬1');
 
@@ -121,13 +121,19 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
     await page.send('Page.reload');
     await page.waitFor(`document.querySelectorAll('tr.comment .cbody').length === 2`);
 
-    await page.evaluate(`(() => {
-      const q = document.querySelector('.questions textarea');
-      q.value = 'No'; q.dispatchEvent(new Event('input'));
-      const g = document.getElementById('general');
-      g.value = 'Almost there'; g.dispatchEvent(new Event('input'));
-      document.getElementById('changes').click();
-    })()`);
+    // Edit the first comment (replace its text) and save.
+    await page.evaluate(`document.querySelector('#f0-0 tr.comment button.link').click()`);
+    await page.waitFor(`document.querySelector('#f0-0 tr.comment textarea')?.value === 'Drop this comment'`);
+    await page.evaluate(`document.querySelector('#f0-0 tr.comment textarea').select()`);
+    await page.send('Input.insertText', { text: 'Drop this comment, please' });
+    await page.evaluate(`document.querySelector('#f0-0 tr.comment button.primary').click()`);
+    await page.waitFor(`document.querySelector('#f0-0 .cbody')?.textContent === 'Drop this comment, please'`);
+    assert.equal(await page.evaluate(`document.querySelectorAll('tr.comment .cbody').length`), 2);
+
+    // Typing and submitting in the same tick must not lose the text.
+    await page.type('.questions textarea', 'No');
+    await page.type('#general', 'Almost there');
+    await page.evaluate(`document.getElementById('changes').click()`);
     await page.waitFor(`document.querySelector('.done h1')?.textContent === 'Changes requested'`);
   } finally {
     page.close();
@@ -137,7 +143,7 @@ test('e2e: comment, answer and submit in the browser; CLI prints the feedback', 
   assert.match(stdout, /Verdict: \*\*changes requested\*\*/);
   assert.match(stdout, /## General\n\nAlmost there/);
   assert.match(stdout, /\*\*Q: Keep the comment\?\*\*\n\nNo/);
-  assert.match(stdout, /\*\*app\.js:2\*\* \(new side\)\n\n```diff\n\+  \/\/ sum\n```\n\nDrop this comment/);
+  assert.match(stdout, /\*\*app\.js:2\*\* \(new side\)\n\n```diff\n\+  \/\/ sum\n```\n\nDrop this comment, please/);
   assert.match(stdout, /\*\*notes\.txt:1-3\*\* \(new side\)\n\n```diff\n\+one\n\+two\n\+three\n```\n\nWhole file is odd/);
   assert.ok(stdout.indexOf('/web') < stdout.indexOf('/lib'));
 });

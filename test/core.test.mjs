@@ -135,7 +135,9 @@ test('startReview: token required, serves page, review and vendor files, resolve
   assert.equal((await fetch(u.origin + '/')).status, 403);
   assert.equal((await fetch(u.origin + '/api/review?t=wrong')).status, 403);
   assert.match(await (await fetch(url)).text(), /<title>Feedbacker review<\/title>/);
-  assert.equal((await fetch(u.origin + '/vendor/highlight.min.js')).status, 200);
+  for (const asset of ['/app.js', '/vendor/highlight.min.js', '/vendor/react.production.min.js', '/vendor/react-dom.production.min.js', '/vendor/htm.umd.js']) {
+    assert.equal((await fetch(u.origin + asset)).status, 200, asset);
+  }
   assert.equal((await fetch(u.origin + '/vendor/../core.mjs')).status, 403);
   const data = await (await fetch(`${u.origin}/api/review?t=${t}`)).json();
   assert.equal(data.repos[0].files[0].path, 'a.js');

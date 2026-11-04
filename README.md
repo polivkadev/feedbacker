@@ -3,7 +3,7 @@
 A local, merge-request-style review page for coding agents. The agent passes the git repos it changed, a summary and optionally some questions. You see the diffs of **all of them on one page**, comment on lines, answer the questions, and click **Approve** or **Request changes**. The agent gets your feedback back as markdown it can act on.
 
 - **Multi-repo and worktrees**: any repos anywhere on disk, each with its own base; `--worktrees` pulls in every git worktree of a repo, so parallel agents' work is reviewed together.
-- **Simple**: one Node process, no build step, no runtime dependencies (highlight.js is vendored).
+- **Simple**: one Node process, no build step, no `npm install`. The page is a small React app; React, [htm](https://github.com/developit/htm) (JSX-like templates without a compiler) and highlight.js are vendored.
 - **Local**: binds to `127.0.0.1` with a random token in the URL. Nothing leaves your machine, and git is only read.
 - **Three ways in**: a Claude Code plugin (MCP tool + skill), a plain MCP server for other agents, and a CLI for anything with a shell.
 
@@ -122,7 +122,8 @@ feedbacker ──markdown (tool result / stdout)──▶ agent
 | File | |
 |---|---|
 | `src/core.mjs` | Reads diffs (`git diff <base>` plus untracked files), parses them, serves the page, formats feedback. |
-| `src/page.html` | The review page: plain JS, diff table, inline comments, highlight.js. |
+| `src/page.html` | Page shell: styles and the vendored scripts. |
+| `src/app.js` | The review page as a React app (React 18 + htm, no build): diff table, inline comments, questions, submit. |
 | `src/mcp.mjs` | Minimal MCP server over stdio (JSON-RPC), one tool. |
 | `bin/feedbacker.mjs` | CLI: review, `list`, `mcp`. |
 | `skills/review/SKILL.md`, `.mcp.json`, `.claude-plugin/` | The Claude Code plugin and its marketplace entry. |
@@ -141,4 +142,4 @@ Plans: [ROADMAP.md](ROADMAP.md).
 
 ## Licence
 
-MIT. highlight.js (`src/vendor/`) is BSD-3-Clause; see `src/vendor/highlight.js-LICENSE`.
+MIT. Vendored in `src/vendor/`, each with its licence file: React and ReactDOM 18.3.1 (MIT), htm 3.1.1 (Apache-2.0), highlight.js 11.11.1 (BSD-3-Clause).
