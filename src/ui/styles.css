@@ -17,6 +17,8 @@
   --del: #fbeaed;
   --del-gutter: #f4d1d8;
   --del-ink: #b4233c;
+  --add-word: #a9dfc8;
+  --del-word: #f0b6c1;
   --hunk: #eef0f6;
   --marker: #ffe766;
   --marker-soft: #fff6bf;
@@ -58,6 +60,8 @@
     --del: #2a1820;
     --del-gutter: #45212d;
     --del-ink: #f0778b;
+    --add-word: #1f5a45;
+    --del-word: #6a2a3b;
     --hunk: #1c2130;
     --marker: #f2d44c;
     --marker-soft: rgba(242, 212, 76, 0.16);
@@ -202,6 +206,12 @@ textarea:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3p
 .file.collapsed .fhead { border-bottom: none; border-radius: 10px; }
 .fhead .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .fhead .old { color: var(--muted); }
+/* Viewed: a checkbox per file; viewed files collapse and dim in the tree. */
+.viewed-box { display: inline-flex; align-items: center; gap: 6px; font: 13px var(--sans); color: var(--muted); cursor: pointer; white-space: nowrap; }
+.viewed-box input { accent-color: var(--approve); margin: 0; }
+.file.viewed .fhead .name { color: var(--muted); }
+.tree a.viewed .path { color: var(--faint); }
+.tree .tick { color: var(--approve); font-weight: 700; }
 .fold { border: none; background: none; cursor: pointer; color: var(--muted); padding: 0 2px; font-size: 13px; width: 18px; }
 .fold:hover { color: var(--ink); }
 .fnote { padding: 12px 16px; color: var(--muted); font-size: 14px; }
@@ -224,6 +234,11 @@ td.code { white-space: pre; padding: 0 12px 0 4px; }
 td.code .sign { display: inline-block; width: 1.4em; color: var(--faint); user-select: none; }
 tr.add td { background: var(--add); } tr.add td.ln { background: var(--add-gutter); } tr.add .sign { color: var(--add-ink); }
 tr.del td { background: var(--del); } tr.del td.ln { background: var(--del-gutter); } tr.del .sign { color: var(--del-ink); }
+/* Changed words inside a changed line. */
+mark.wd { color: inherit; border-radius: 3px; padding: 1px 0; }
+tr.add mark.wd { background: var(--add-word); }
+tr.del mark.wd { background: var(--del-word); }
+tr.sel mark.wd { background: var(--marker); color: var(--on-marker, #3d2f00); }
 tr.hunk td { background: var(--hunk); color: var(--muted); padding-top: 3px; padding-bottom: 3px; }
 tr.sel td { background: var(--marker-soft) !important; }
 tr.sel td.ln { color: var(--ink); }

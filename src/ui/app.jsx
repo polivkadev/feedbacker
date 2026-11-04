@@ -4,6 +4,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { highlightFile } from './highlight.js';
+import { escapeHtml, markRanges, wordMarks } from './wordDiff.js';
 import { Brand } from './Logo.jsx';
 import './styles.css';
 
@@ -14,7 +15,7 @@ const EMPTY = [];
 
 // Saved so a refresh doesn't lose work. comments: id -> comment.
 function loadState() {
-  const empty = { comments: {}, answers: {}, general: '', nextId: 1, view: 'all' };
+  const empty = { comments: {}, answers: {}, general: '', nextId: 1, view: 'all', viewed: {} };
   try { return { ...empty, ...JSON.parse(localStorage.getItem(storeKey)) }; } catch { return empty; }
 }
 
@@ -51,12 +52,14 @@ function Counts({ add, del }) {
   );
 }
 
-function Code({ row, hl }) {
+function Code({ row, hl, words }) {
   const h = hl?.get(row);
+  const marks = words?.get(row);
+  const html = marks ? markRanges(h ?? escapeHtml(row.s), marks) : h;
   return (
     <td className="code">
       <span className="sign">{row.t === ' ' ? '' : row.t}</span>
-      {h != null ? <span dangerouslySetInnerHTML={{ __html: h }} /> : <span>{row.s}</span>}
+      {html != null ? <span dangerouslySetInnerHTML={{ __html: html }} /> : <span>{row.s}</span>}
     </td>
   );
 }
@@ -101,12 +104,15 @@ function CommentRow({ id, c, onEdit, onDelete }) {
   );
 }
 
-const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftRef, label, onSelect, onSave, onCancel, onEdit, onDelete }) {
+const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftRef, label, viewed, onViewed, onSelect, onSave, onCancel, onEdit, onDelete }) {
   // Large and minified files start collapsed.
   const minified = useMemo(() => file.rows.some((r) => r.s.length > 1000), [file]);
   const [shown, setShown] = useState(file.rows.length <= 2000 && !minified);
-  const [open, setOpen] = useState(true);
+  // Viewed files start (and get) collapsed.
+  const [open, setOpen] = useState(!viewed);
   const hl = useMemo(() => (shown ? highlightFile(file) : null), [file, shown]);
+  const words = useMemo(() => (shown ? wordMarks(file.rows) : null), [file, shown]);
+  const toggleViewed = (e) => { onViewed(fk, e.target.checked); setOpen(!e.target.checked); };
   const stats = useMemo(() => fileStats(file), [file]);
 
   const rows = [];
@@ -122,7 +128,7 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
         <tr key={'r' + i} className={cls}>
           <td className="ln" onClick={click}>{row.o ?? ''}</td>
           <td className="ln" onClick={click}>{row.n ?? ''}</td>
-          <Code row={row} hl={hl} />
+          <Code row={row} hl={hl} words={words} />
         </tr>,
       );
       for (const [id, c] of comments) {
@@ -136,7 +142,7 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
   }
 
   return (
-    <div className={'file' + (open ? '' : ' collapsed')} id={domId}>
+    <div className={'file' + (open ? '' : ' collapsed') + (viewed ? ' viewed' : '')} id={domId}>
       <div className="fhead">
         <button className="fold" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={(open ? 'Collapse ' : 'Expand ') + file.path}>
           {open ? '▾' : '▸'}
@@ -148,6 +154,9 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
         </span>
         <Counts {...stats} />
         {comments.length > 0 && <span className="marks">{comments.length}</span>}
+        <label className="viewed-box">
+          <input type="checkbox" checked={!!viewed} onChange={toggleViewed} /> Viewed
+        </label>
       </div>
       {open && file.binary && <div className="fnote">Binary file, not shown.</div>}
       {open && !file.binary && !file.rows.length && <div className="fnote">Only the file mode or name changed.</div>}
@@ -162,7 +171,7 @@ const FileDiff = memo(function FileDiff({ fk, domId, file, comments, sel, draftR
   );
 });
 
-function Tree({ review, visible, byFile }) {
+function Tree({ review, visible, byFile, viewed }) {
   return (
     <nav className="tree" aria-label="Changed files">
       {review.repos.map((repo, ri) => visible(ri) && (
@@ -173,11 +182,12 @@ function Tree({ review, visible, byFile }) {
           </div>
           {repo.files.map((file, fi) => {
             const n = byFile[ri + ':' + fi]?.length || 0;
+            const seen = !!viewed[ri + ':' + fi];
             return (
-              <a key={fi} href={'#f' + ri + '-' + fi} title={file.path}>
+              <a key={fi} href={'#f' + ri + '-' + fi} title={file.path + (seen ? ' (viewed)' : '')} className={seen ? 'viewed' : undefined}>
                 <span className={'st ' + file.status}>{STATUS[file.status]}</span>
                 <span className="path"><bdi>{file.path}</bdi></span>
-                <span className="count">{n > 0 && <span className="marks">{n}</span>}</span>
+                <span className="count">{n > 0 ? <span className="marks">{n}</span> : seen && <span className="tick" aria-label="viewed">✓</span>}</span>
               </a>
             );
           })}
@@ -295,6 +305,10 @@ function App() {
     const { [id]: _, ...rest } = st.comments;
     return { ...st, comments: rest };
   }), [update]);
+  const onViewed = useCallback((fk, v) => update((st) => {
+    const { [fk]: _, ...rest } = st.viewed;
+    return { ...st, viewed: v ? { ...rest, [fk]: true } : rest };
+  }), [update]);
   const onAnswer = useCallback((i, v) => update((st) => ({ ...st, answers: { ...st.answers, [i]: v } })), [update]);
 
   async function submit(verdict) {
@@ -319,13 +333,17 @@ function App() {
   const onView = useCallback((v) => { update((st) => ({ ...st, view: v })); window.scrollTo(0, 0); }, [update]);
   const totals = useMemo(() => {
     if (!review) return null;
-    let files = 0, add = 0, del = 0;
+    let files = 0, add = 0, del = 0, seen = 0;
     review.repos.forEach((repo, ri) => {
       if (!visible(ri)) return;
-      for (const f of repo.files) { files++; const st = fileStats(f); add += st.add; del += st.del; }
+      repo.files.forEach((f, fi) => {
+        files++;
+        if (state.viewed[ri + ':' + fi]) seen++;
+        const st = fileStats(f); add += st.add; del += st.del;
+      });
     });
-    return { files, add, del };
-  }, [review, visible]);
+    return { files, add, del, seen };
+  }, [review, visible, state.viewed]);
   const nComments = Object.keys(state.comments).length;
 
   if (done) {
@@ -349,6 +367,7 @@ function App() {
         <span className="stats">
           <span>{view === 'all' ? plural(totals.files, 'file') + ' in ' + plural(review.repos.length, 'repo') : plural(totals.files, 'file')}</span>
           <Counts add={totals.add} del={totals.del} />
+          {totals.seen > 0 && <span>{totals.seen} of {totals.files} viewed</span>}
         </span>
         {nComments > 0 && <span className="marks">{plural(nComments, 'comment')}</span>}
         <span className="spacer" />
@@ -356,7 +375,7 @@ function App() {
         <button id="approve" className="btn approve" onClick={() => submit('approve')}>Approve</button>
       </header>
       <div className="layout">
-        <Tree review={review} visible={visible} byFile={byFile} />
+        <Tree review={review} visible={visible} byFile={byFile} viewed={state.viewed} />
         <main className="review">
           <section className="handoff">
             <p id="summary" className={'summary' + (review.summary ? '' : ' empty')}>{review.summary || 'The agent didn’t describe the change.'}</p>
@@ -378,6 +397,7 @@ function App() {
                 return (
                   <FileDiff key={fk} fk={fk} domId={'f' + ri + '-' + fi} file={file}
                     comments={byFile[fk] || EMPTY} sel={fileSel} draftRef={draftRef}
+                    viewed={!!state.viewed[fk]} onViewed={onViewed}
                     label={fileSel ? lineLabel(anchor(review, fk, fileSel.a, fileSel.b)) : ''}
                     onSelect={onSelect} onSave={onSave} onCancel={onCancel} onEdit={onEdit} onDelete={onDelete} />
                 );
