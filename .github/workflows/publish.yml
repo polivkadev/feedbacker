@@ -2,7 +2,7 @@
 # package.json). Uses npm trusted publishing (OIDC): no npm token is stored, and
 # the package gets a provenance statement linking it to this workflow run.
 # Setup on npmjs.com: package settings > Trusted publisher > GitHub Actions,
-# repository PavlikPolivka/feedbacker, workflow publish.yml.
+# repository polivkadev/feedbacker, workflow publish.yml.
 name: Publish
 
 on:

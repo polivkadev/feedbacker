@@ -14,7 +14,7 @@ A local, merge-request-style review page for coding agents. The agent passes the
 ### Claude Code plugin
 
 ```bash
-claude plugin marketplace add PavlikPolivka/feedbacker
+claude plugin marketplace add polivkadev/feedbacker
 claude plugin install feedbacker@feedbacker
 ```
 
@@ -173,7 +173,7 @@ Publishing to npm is done by GitHub Actions (`.github/workflows/publish.yml`) wi
 2. Create a GitHub release with the tag `vX.Y.Z` matching that version: `gh release create v0.2.0 --generate-notes`.
 3. The workflow checks the tag, runs the tests and publishes.
 
-One-time setup: on npmjs.com, add a trusted publisher for the package (GitHub Actions, repository `PavlikPolivka/feedbacker`, workflow `publish.yml`). npm only offers that once the package exists, so the very first version is published by hand with `npm publish --access public`.
+One-time setup: on npmjs.com, add a trusted publisher for the package (GitHub Actions, repository `polivkadev/feedbacker`, workflow `publish.yml`). npm only offers that once the package exists, so the very first version is published by hand with `npm publish --access public`.
 
 Plans: [ROADMAP.md](ROADMAP.md).
 
